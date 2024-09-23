@@ -45,8 +45,23 @@ func NewWSManager() *WSManager {
 	}
 }
 
-func (m *WSManager) Debug(t bool) {
-	m.debug = t
+func (m *WSManager) WithDebug() *WSManager {
+	m.debug = true
+	return m
+}
+
+func (m *WSManager) Init() (*WSManager, error) {
+	err := m.Listen()
+	if err != nil {
+		return m, err
+	}
+	go func() {
+		err := m.StartServer()
+		if err != nil {
+			panic(fmt.Errorf("init plugins manager: %w", err))
+		}
+	}()
+	return m, nil
 }
 
 func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
