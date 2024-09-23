@@ -11,7 +11,10 @@ func main() {
 	ctx := context.Background()
 
 	// init plugins manager
-	pluginsManager := extensionmanager.NewWSManager().WithDebug().Init()
+	pluginsManager, err := extensionmanager.NewWSManager().Init()
+	if err != nil {
+		panic(err)
+	}
 
 	// load required plugins
 	pluginsNames := []string{"../plugina/plugina"}
@@ -20,11 +23,11 @@ func main() {
 	}
 
 	// execute extension hello
-	// it receives strings as input and returns the PrintHelloResponse struct as a result
+	// it receives string as an input and returns the PrintHelloResponse struct as a result
 	extensionID := "hello"
 	ch := extensionmanager.ExecuteExtension[string, PrintHelloResponse](pluginsManager, extensionID, "Anton")
 
-	// iterate over channel to retrieve results of all extensions
+	// iterate over channel to retrieve all results provided by extensions
 	for e := range ch {
 		if e.Err != nil {
 			panic(e.Err)

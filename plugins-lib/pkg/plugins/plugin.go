@@ -52,8 +52,6 @@ func Start(pluginID string) {
 	flag.Parse()
 	pluginSecret = *pmsSecret
 
-	fmt.Println("1")
-
 	serverAddr := fmt.Sprintf("127.0.0.1:%d", *pmsPort)
 
 	u := url.URL{Scheme: "ws", Host: serverAddr, Path: "/"}
@@ -63,8 +61,6 @@ func Start(pluginID string) {
 		log.Fatal("dial:", err)
 	}
 	defer c.Close()
-
-	fmt.Println("2")
 
 	msgRegister := RegisterPluginMessage{
 		Type: CommandTypeRegisterPlugin,
@@ -80,14 +76,12 @@ func Start(pluginID string) {
 	c.WriteMessage(websocket.TextMessage, msgRegisterBytes)
 	// TODO: process error
 
-	fmt.Println("3")
 	for {
 		_, msgBytes, err := c.ReadMessage()
 		if err != nil {
 			return
 		}
 
-		fmt.Println("4")
 		ctx := context.Background()
 
 		var msg Message
@@ -95,30 +89,23 @@ func Start(pluginID string) {
 			// TODO: process error
 		}
 
-		fmt.Println("5")
-
 		// TODO: process error
 
 		// TODO: Process commands
 		if msg.Type == CommandTypeExecuteExtension {
-			fmt.Println("8")
 			var executeExtensionData ExecuteExtensionData
 			if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
 				// TODO: process error
 			}
-			fmt.Println("9")
-			fmt.Println(executeExtensionData.ExtensionID)
 			if ext, ok := extensions[executeExtensionData.ExtensionID]; ok {
 				in, err := ext.Unmarshaler(executeExtensionData.Data)
 				if err != nil {
 					// TODO: process error
 				}
-				fmt.Println("6")
 				out, err := ext.Process(ctx, in)
 				if err != nil {
 					// TODO: process error
 				}
-				fmt.Println("7")
 				outBytes, err := ext.Marshaller(out)
 				if err != nil {
 					// TODO: process error
