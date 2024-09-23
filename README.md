@@ -12,3 +12,4 @@ Simple example could be found in the [examplecli](./examplecli) folder. It conta
 - [ ] Progress service
 
 - [ ] Extensions Ordering
+- [ ] Auto update and download plugins
