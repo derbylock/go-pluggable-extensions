@@ -41,11 +41,13 @@ func NewWSManager() *WSManager {
 		pluginIDBySecret:          make(map[string]string),
 		channelByPluginID:         make(map[string]*websocket.Conn),
 		channelsByExtensionIDs:    make(map[string][]*websocket.Conn),
+		debug:                     debug,
 	}
 }
 
-func (m *WSManager) Debug(t bool) {
-	m.debug = t
+func (m *WSManager) WithDebug() *WSManager {
+	m.debug = true
+	return m
 }
 
 func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
@@ -291,4 +293,10 @@ func (m *WSManager) AwaitPlugins(ctx context.Context, secrets []string) error {
 			m.mu.Unlock()
 		}
 	}
+}
+
+func (m *WSManager) Init() *WSManager {
+	m.Listen()
+	go m.StartServer()
+	return m
 }

@@ -5,34 +5,32 @@ import (
 	"fmt"
 	"github.com/derbylock/go-pluggable-extensions/examplecli/app/pkg/extensionmanager"
 	"log"
-	"time"
 )
 
 func main() {
-	now := time.Now()
-
 	ctx := context.Background()
 
-	pman := extensionmanager.NewWSManager()
-	pman.Debug(false)
-	pman.Listen()
-	go pman.StartServer()
+	// init plugins manager
+	pluginsManager := extensionmanager.NewWSManager().WithDebug().Init()
 
-	for i := 0; i < 100; i++ {
-		if err := pman.LoadPlugins(ctx, "../plugina/plugina"); err != nil {
-			log.Fatal(err)
-		}
+	// load required plugins
+	pluginsNames := []string{"../plugina/plugina"}
+	if err := pluginsManager.LoadPlugins(ctx, pluginsNames...); err != nil {
+		log.Fatal(err)
 	}
-	fmt.Println(time.Since(now))
 
-	ch := extensionmanager.ExecuteExtension[string, PrintHelloResponse](pman, "hello", "Anton")
+	// execute extension hello
+	// it receives strings as input and returns the PrintHelloResponse struct as a result
+	extensionID := "hello"
+	ch := extensionmanager.ExecuteExtension[string, PrintHelloResponse](pluginsManager, extensionID, "Anton")
+
+	// iterate over channel to retrieve results of all extensions
 	for e := range ch {
 		if e.Err != nil {
 			panic(e.Err)
 		}
 		fmt.Println(e.Out.Message)
 	}
-	fmt.Println(time.Since(now))
 }
 
 type PrintHelloResponse struct {

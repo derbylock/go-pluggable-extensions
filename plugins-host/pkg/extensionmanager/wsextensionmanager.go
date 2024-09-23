@@ -164,7 +164,7 @@ func ExecuteExtension[IN any, OUT any](m *WSManager, extensionID string, in IN) 
 			}
 
 			sendMsg := &plugins.Message{
-				Type:    CommandTypeExecuteExtension,
+				Type:    plugins.CommandTypeExecuteExtension,
 				MsgID:   msgID,
 				Data:    msgDataBytes,
 				IsFinal: true,
