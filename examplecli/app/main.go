@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/derbylock/go-pluggable-extensions/examplecli/app/pkg/extensionmanager"
+	"github.com/derbylock/go-pluggable-extensions/plugins-host/pkg/extensionmanager"
 	"log"
 )
 
