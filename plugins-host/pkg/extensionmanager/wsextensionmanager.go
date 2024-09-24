@@ -22,26 +22,31 @@ type WaiterInfo struct {
 	out any
 }
 
+type extensionRuntimeInfo struct {
+	conn *websocket.Conn
+	cfg  plugins.ExtensionConfig
+}
+
 type WSManager struct {
-	debug                     bool
-	lis                       net.Listener
-	pmsPort                   int
-	mu                        *sync.Mutex
-	pluginRegistrationChannel chan string
-	waiters                   map[string]*WaiterInfo
-	pluginIDBySecret          map[string]string
-	channelByPluginID         map[string]*websocket.Conn
-	channelsByExtensionIDs    map[string][]*websocket.Conn
+	debug                                   bool
+	lis                                     net.Listener
+	pmsPort                                 int
+	mu                                      *sync.Mutex
+	pluginRegistrationChannel               chan string
+	waiters                                 map[string]*WaiterInfo
+	pluginIDBySecret                        map[string]string
+	channelByPluginID                       map[string]*websocket.Conn
+	extensionRuntimeInfoByExtensionPointIDs map[string][]extensionRuntimeInfo
 }
 
 func NewWSManager() *WSManager {
 	return &WSManager{
-		mu:                        &sync.Mutex{},
-		pluginRegistrationChannel: make(chan string),
-		waiters:                   make(map[string]*WaiterInfo),
-		pluginIDBySecret:          make(map[string]string),
-		channelByPluginID:         make(map[string]*websocket.Conn),
-		channelsByExtensionIDs:    make(map[string][]*websocket.Conn),
+		mu:                                      &sync.Mutex{},
+		pluginRegistrationChannel:               make(chan string),
+		waiters:                                 make(map[string]*WaiterInfo),
+		pluginIDBySecret:                        make(map[string]string),
+		channelByPluginID:                       make(map[string]*websocket.Conn),
+		extensionRuntimeInfoByExtensionPointIDs: make(map[string][]extensionRuntimeInfo),
 	}
 }
 
@@ -98,13 +103,19 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 					m.Started(registerData.Secret)
 					m.mu.Lock()
 					m.channelByPluginID[registerData.PluginID] = c
-					for _, extensionID := range registerData.ExtensionIDs {
-						currentChannels, ok := m.channelsByExtensionIDs[extensionID]
+					for _, extensionConfig := range registerData.Extensions {
+						currentChannels, ok := m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID]
 						if !ok {
-							currentChannels = make([]*websocket.Conn, 0)
+							currentChannels = make([]extensionRuntimeInfo, 0)
 						}
-						currentChannels = append(currentChannels, c)
-						m.channelsByExtensionIDs[extensionID] = currentChannels
+						currentChannels = append(currentChannels, extensionRuntimeInfo{
+							conn: c,
+							cfg:  extensionConfig,
+						})
+
+						// reorder channels according to order
+
+						m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID] = currentChannels
 					}
 					m.mu.Unlock()
 				case plugins.CommandTypeExecuteExtension:
@@ -143,12 +154,12 @@ type ExecuteExtensionResult[OUT any] struct {
 
 func ExecuteExtension[IN any, OUT any](m *WSManager, extensionID string, in IN) chan ExecuteExtensionResult[OUT] {
 	m.mu.Lock()
-	channels := m.channelsByExtensionIDs[extensionID]
+	extensionRuntimeInfos := m.extensionRuntimeInfoByExtensionPointIDs[extensionID]
 	m.mu.Unlock()
 
 	res := make(chan ExecuteExtensionResult[OUT])
 	go func() {
-		for _, channel := range channels {
+		for _, runtimeInfo := range extensionRuntimeInfos {
 			inBytes, err := json.Marshal(in)
 			if err != nil {
 				// TODO: process error
@@ -204,7 +215,7 @@ func ExecuteExtension[IN any, OUT any](m *WSManager, extensionID string, in IN) 
 				out: &out,
 			}
 			m.mu.Unlock()
-			if err := channel.WriteMessage(websocket.TextMessage, sendMsgBytes); err != nil {
+			if err := runtimeInfo.conn.WriteMessage(websocket.TextMessage, sendMsgBytes); err != nil {
 				// TODO: process error
 				var o OUT
 				res <- ExecuteExtensionResult[OUT]{

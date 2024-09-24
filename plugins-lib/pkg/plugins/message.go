@@ -24,10 +24,10 @@ type RegisterPluginData struct {
 }
 
 type ExtensionConfig struct {
-	ID               string
-	ExtensionPointID string
-	BeforeExtensions string
-	AfterExtensions  string
+	ID                 string
+	ExtensionPointID   string
+	BeforeExtensionIDs []string
+	AfterExtensionIDs  []string
 }
 
 type RegisterPluginMessage struct {
