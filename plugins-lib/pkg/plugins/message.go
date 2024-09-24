@@ -18,9 +18,16 @@ type Message struct {
 }
 
 type RegisterPluginData struct {
-	PluginID     string   `json:"pluginID"`
-	Secret       string   `json:"secret"`
-	ExtensionIDs []string `json:"extensionIDs"`
+	PluginID   string            `json:"pluginID"`
+	Secret     string            `json:"secret"`
+	Extensions []ExtensionConfig `json:"extensions"`
+}
+
+type ExtensionConfig struct {
+	ID               string
+	ExtensionPointID string
+	BeforeExtensions string
+	AfterExtensions  string
 }
 
 type RegisterPluginMessage struct {

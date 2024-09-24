@@ -10,7 +10,12 @@ import (
 	"net/url"
 )
 
-var extensions = make(map[string]ExtensionImplementation[any, any], 0)
+type ExtensionRuntimeInfo struct {
+	cfg  ExtensionConfig
+	impl ExtensionImplementation[any, any]
+}
+
+var extensions = make(map[string]ExtensionRuntimeInfo, 0)
 
 var pluginSecret string
 
@@ -24,24 +29,27 @@ type ExtensionImplementation[IN any, OUT any] struct {
 	Marshaller  func(out OUT) ([]byte, error)
 }
 
-func Extension[IN any, OUT any](extensionID string, implementation func(ctx context.Context, in IN) (OUT, error)) {
-	extensions[extensionID] = ExtensionImplementation[any, any]{
-		Process: func(ctx context.Context, in any) (any, error) {
-			inTyped := in.(IN)
-			out, err := implementation(ctx, inTyped)
-			if err != nil {
-				return nil, err
-			}
-			return out, nil
-		},
-		Unmarshaler: func(bytes []byte) (any, error) {
-			var in IN
-			err := json.Unmarshal(bytes, &in)
-			return in, err
-		},
-		Marshaller: func(out any) ([]byte, error) {
-			bytes, err := json.Marshal(out)
-			return bytes, err
+func Extension[IN any, OUT any](cfg ExtensionConfig, implementation func(ctx context.Context, in IN) (OUT, error)) {
+	extensions[cfg.ExtensionPointID] = ExtensionRuntimeInfo{
+		cfg: cfg,
+		impl: ExtensionImplementation[any, any]{
+			Process: func(ctx context.Context, in any) (any, error) {
+				inTyped := in.(IN)
+				out, err := implementation(ctx, inTyped)
+				if err != nil {
+					return nil, err
+				}
+				return out, nil
+			},
+			Unmarshaler: func(bytes []byte) (any, error) {
+				var in IN
+				err := json.Unmarshal(bytes, &in)
+				return in, err
+			},
+			Marshaller: func(out any) ([]byte, error) {
+				bytes, err := json.Marshal(out)
+				return bytes, err
+			},
 		},
 	}
 }
@@ -62,12 +70,17 @@ func Start(pluginID string) {
 	}
 	defer c.Close()
 
+	implementedExtensions := make([]ExtensionConfig, 0)
+	for _, extensionInfo := range extensions {
+		implementedExtensions = append(implementedExtensions, extensionInfo.cfg)
+	}
+
 	msgRegister := RegisterPluginMessage{
 		Type: CommandTypeRegisterPlugin,
 		Data: RegisterPluginData{
-			PluginID:     pluginID,
-			Secret:       pluginSecret,
-			ExtensionIDs: []string{"hello"},
+			PluginID:   pluginID,
+			Secret:     pluginSecret,
+			Extensions: implementedExtensions,
 		},
 		IsFinal: true,
 	}
@@ -98,15 +111,15 @@ func Start(pluginID string) {
 				// TODO: process error
 			}
 			if ext, ok := extensions[executeExtensionData.ExtensionID]; ok {
-				in, err := ext.Unmarshaler(executeExtensionData.Data)
+				in, err := ext.impl.Unmarshaler(executeExtensionData.Data)
 				if err != nil {
 					// TODO: process error
 				}
-				out, err := ext.Process(ctx, in)
+				out, err := ext.impl.Process(ctx, in)
 				if err != nil {
 					// TODO: process error
 				}
-				outBytes, err := ext.Marshaller(out)
+				outBytes, err := ext.impl.Marshaller(out)
 				if err != nil {
 					// TODO: process error
 				}
