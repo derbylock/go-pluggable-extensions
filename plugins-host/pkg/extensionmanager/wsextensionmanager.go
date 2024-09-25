@@ -129,6 +129,9 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 						if err != nil {
 							m.mu.Unlock()
 							m.Failure(err)
+
+							// lock to unlock after
+							m.mu.Lock()
 							break
 						}
 
