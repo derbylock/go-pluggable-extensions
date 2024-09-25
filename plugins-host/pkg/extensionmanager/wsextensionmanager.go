@@ -54,7 +54,7 @@ func NewWSManager() *WSManager {
 		extensionRuntimeInfoByExtensionPointIDs: make(map[string][]extensionRuntimeInfo),
 	}
 
-	return m.WithFailureProcessor(m.failureProcessor)
+	return m.WithFailureProcessor(m.DefaultFailureProcessor)
 }
 
 func (m *WSManager) WithDebug() *WSManager {
