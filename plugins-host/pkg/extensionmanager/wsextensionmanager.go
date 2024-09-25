@@ -27,8 +27,11 @@ type extensionRuntimeInfo struct {
 	cfg  plugins.ExtensionConfig
 }
 
+type failureProcessor func(err error)
+
 type WSManager struct {
 	debug                                   bool
+	failureProcessor                        failureProcessor
 	lis                                     net.Listener
 	pmsPort                                 int
 	mu                                      *sync.Mutex
@@ -42,6 +45,7 @@ type WSManager struct {
 func NewWSManager() *WSManager {
 	return &WSManager{
 		mu:                                      &sync.Mutex{},
+		failureProcessor:                        panicFailureProcessor,
 		pluginRegistrationChannel:               make(chan string),
 		waiters:                                 make(map[string]*WaiterInfo),
 		pluginIDBySecret:                        make(map[string]string),
@@ -52,6 +56,11 @@ func NewWSManager() *WSManager {
 
 func (m *WSManager) WithDebug() *WSManager {
 	m.debug = true
+	return m
+}
+
+func (m *WSManager) WithFailureProcessor(p failureProcessor) *WSManager {
+	m.failureProcessor = p
 	return m
 }
 
@@ -104,18 +113,23 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 					m.mu.Lock()
 					m.channelByPluginID[registerData.PluginID] = c
 					for _, extensionConfig := range registerData.Extensions {
-						currentChannels, ok := m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID]
+						currentExtensionRuntimeInfos, ok := m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID]
 						if !ok {
-							currentChannels = make([]extensionRuntimeInfo, 0)
+							currentExtensionRuntimeInfos = make([]extensionRuntimeInfo, 0)
 						}
-						currentChannels = append(currentChannels, extensionRuntimeInfo{
+						currentExtensionRuntimeInfos = append(currentExtensionRuntimeInfos, extensionRuntimeInfo{
 							conn: c,
 							cfg:  extensionConfig,
 						})
 
 						// reorder channels according to order
+						prioritizedExtensionRuntimeInfos, err := OrderExtensionRuntimeInfo(currentExtensionRuntimeInfos)
+						if err != nil {
+							m.mu.Unlock()
+							m.Failure(err)
+						}
 
-						m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID] = currentChannels
+						m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID] = prioritizedExtensionRuntimeInfos
 					}
 					m.mu.Unlock()
 				case plugins.CommandTypeExecuteExtension:
@@ -318,4 +332,12 @@ func (m *WSManager) AwaitPlugins(ctx context.Context, secrets []string) error {
 			m.mu.Unlock()
 		}
 	}
+}
+
+func (m *WSManager) Failure(err error) {
+	m.failureProcessor(err)
+}
+
+func panicFailureProcessor(err error) {
+	panic(err)
 }

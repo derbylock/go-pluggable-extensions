@@ -20,6 +20,12 @@ func (s *Set[T]) Add(t T) {
 	s.m[t] = struct{}{}
 }
 
+func (s *Set[T]) AddAll(st *Set[T]) {
+	for t := range st.m {
+		s.m[t] = struct{}{}
+	}
+}
+
 func (s *Set[T]) Remove(t T) {
 	delete(s.m, t)
 }
@@ -31,4 +37,16 @@ func (s *Set[T]) Contains(t T) bool {
 
 func (s *Set[T]) Clear() {
 	s.m = make(map[T]struct{})
+}
+
+func (s *Set[T]) Values() []T {
+	var res []T
+	for v := range s.m {
+		res = append(res, v)
+	}
+	return res
+}
+
+func (s *Set[T]) Len() int {
+	return len(s.m)
 }

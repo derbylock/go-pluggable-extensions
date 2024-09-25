@@ -13,6 +13,11 @@ func main() {
 			Message: fmt.Sprintf(`"Hello %s from plugin A! %s"`, in, plugins.PluginContextID()),
 		}, nil
 	})
+	plugins.Extension[string, HelloData]("hello", func(ctx context.Context, in string) (HelloData, error) {
+		return HelloData{
+			Message: fmt.Sprintf(`"Hello %s from plugin A! %s"`, in, plugins.PluginContextID()),
+		}, nil
+	})
 	plugins.Start(pluginID)
 }
 
