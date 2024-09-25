@@ -15,7 +15,7 @@ type ExtensionRuntimeInfo struct {
 	impl ExtensionImplementation[any, any]
 }
 
-var extensions = make(map[string]ExtensionRuntimeInfo, 0)
+var extensions = make(map[string]map[string]ExtensionRuntimeInfo, 0)
 
 var pluginSecret string
 
@@ -30,7 +30,13 @@ type ExtensionImplementation[IN any, OUT any] struct {
 }
 
 func Extension[IN any, OUT any](cfg ExtensionConfig, implementation func(ctx context.Context, in IN) (OUT, error)) {
-	extensions[cfg.ExtensionPointID] = ExtensionRuntimeInfo{
+	currentExtensions, ok := extensions[cfg.ExtensionPointID]
+	if !ok {
+		currentExtensions = make(map[string]ExtensionRuntimeInfo)
+	}
+
+	extensions[cfg.ExtensionPointID] = currentExtensions
+	currentExtensions[cfg.ID] = ExtensionRuntimeInfo{
 		cfg: cfg,
 		impl: ExtensionImplementation[any, any]{
 			Process: func(ctx context.Context, in any) (any, error) {
@@ -71,8 +77,10 @@ func Start(pluginID string) {
 	defer c.Close()
 
 	implementedExtensions := make([]ExtensionConfig, 0)
-	for _, extensionInfo := range extensions {
-		implementedExtensions = append(implementedExtensions, extensionInfo.cfg)
+	for _, extensionInfos := range extensions {
+		for _, info := range extensionInfos {
+			implementedExtensions = append(implementedExtensions, info.cfg)
+		}
 	}
 
 	msgRegister := RegisterPluginMessage{
@@ -110,32 +118,34 @@ func Start(pluginID string) {
 			if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
 				// TODO: process error
 			}
-			if ext, ok := extensions[executeExtensionData.ExtensionID]; ok {
-				in, err := ext.impl.Unmarshaler(executeExtensionData.Data)
-				if err != nil {
-					// TODO: process error
-				}
-				out, err := ext.impl.Process(ctx, in)
-				if err != nil {
-					// TODO: process error
-				}
-				outBytes, err := ext.impl.Marshaller(out)
-				if err != nil {
-					// TODO: process error
-				}
+			if exts, ok := extensions[executeExtensionData.ExtensionPointID]; ok {
+				if ext, ok := exts[executeExtensionData.ExtensionID]; ok {
+					in, err := ext.impl.Unmarshaler(executeExtensionData.Data)
+					if err != nil {
+						// TODO: process error
+					}
+					out, err := ext.impl.Process(ctx, in)
+					if err != nil {
+						// TODO: process error
+					}
+					outBytes, err := ext.impl.Marshaller(out)
+					if err != nil {
+						// TODO: process error
+					}
 
-				msgResponse := Message{
-					CorrelationID: msg.MsgID,
-					Type:          CommandTypeExecuteExtension,
-					Data:          outBytes,
-					IsFinal:       true,
+					msgResponse := Message{
+						CorrelationID: msg.MsgID,
+						Type:          CommandTypeExecuteExtension,
+						Data:          outBytes,
+						IsFinal:       true,
+					}
+					msgResponseBytes, err := json.Marshal(msgResponse)
+					if err != nil {
+						log.Fatal(err)
+					}
+					// TODO: process error
+					c.WriteMessage(websocket.TextMessage, msgResponseBytes)
 				}
-				msgResponseBytes, err := json.Marshal(msgResponse)
-				if err != nil {
-					log.Fatal(err)
-				}
-				// TODO: process error
-				c.WriteMessage(websocket.TextMessage, msgResponseBytes)
 			}
 		}
 	}

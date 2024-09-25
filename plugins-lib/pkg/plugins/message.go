@@ -39,6 +39,7 @@ type RegisterPluginMessage struct {
 }
 
 type ExecuteExtensionData struct {
-	ExtensionID string          `json:"extensionID"`
-	Data        json.RawMessage `json:"data"`
+	ExtensionPointID string          `json:"extensionPointID"`
+	ExtensionID      string          `json:"extensionID"`
+	Data             json.RawMessage `json:"data"`
 }
