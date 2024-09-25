@@ -126,8 +126,8 @@ func createRecursiveDependenciesByExtensionID(orig []extensionRuntimeInfo) (map[
 	for _, info := range orig {
 		beforeSet := NewSetFromSlice[string](info.cfg.BeforeExtensionIDs)
 		for _, extensionID := range beforeSet.Values() {
-			if dependencies, ok := recursiveDependenciesByName[info.cfg.ID]; ok {
-				dependencies.Add(extensionID)
+			if dependencies, ok := recursiveDependenciesByName[extensionID]; ok {
+				dependencies.Add(info.cfg.ID)
 			}
 		}
 	}
