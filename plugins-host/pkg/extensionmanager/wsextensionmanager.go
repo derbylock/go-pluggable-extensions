@@ -167,9 +167,9 @@ type ExecuteExtensionResult[OUT any] struct {
 	Err error
 }
 
-func ExecuteExtension[IN any, OUT any](m *WSManager, extensionID string, in IN) chan ExecuteExtensionResult[OUT] {
+func ExecuteExtension[IN any, OUT any](m *WSManager, extensionPointID string, in IN) chan ExecuteExtensionResult[OUT] {
 	m.mu.Lock()
-	extensionRuntimeInfos := m.extensionRuntimeInfoByExtensionPointIDs[extensionID]
+	extensionRuntimeInfos := m.extensionRuntimeInfoByExtensionPointIDs[extensionPointID]
 	m.mu.Unlock()
 
 	res := make(chan ExecuteExtensionResult[OUT])
@@ -189,8 +189,9 @@ func ExecuteExtension[IN any, OUT any](m *WSManager, extensionID string, in IN) 
 
 			msgID := uuid.NewString()
 			msgData := plugins.ExecuteExtensionData{
-				ExtensionID: extensionID,
-				Data:        inBytes,
+				ExtensionPointID: extensionPointID,
+				ExtensionID:      runtimeInfo.cfg.ID,
+				Data:             inBytes,
 			}
 			msgDataBytes, err := json.Marshal(msgData)
 			if err != nil {
