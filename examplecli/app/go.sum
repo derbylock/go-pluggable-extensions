@@ -1,5 +1,5 @@
-github.com/derbylock/go-pluggable-extensions/plugins-host v1.0.16 h1:Q3S4htyTd5xDabz18flCLuCzXVRqzgCvPZy+HYjf5Hs=
-github.com/derbylock/go-pluggable-extensions/plugins-host v1.0.16/go.mod h1:fGxQ13xoPxUZBVdD1jyLS8mA5Y7fltn8P32GKxZ+9s4=
+github.com/derbylock/go-pluggable-extensions/plugins-host v1.0.17 h1:3+MwPLxR4Ai9Nsb89zQU9D3YnAQ5WQLEaWeDBQkVlPE=
+github.com/derbylock/go-pluggable-extensions/plugins-host v1.0.17/go.mod h1:fGxQ13xoPxUZBVdD1jyLS8mA5Y7fltn8P32GKxZ+9s4=
 github.com/derbylock/go-pluggable-extensions/plugins-lib v1.0.9 h1:AhAFLJNyM1LeX/C5pY+4nk78wYfs2LPsbyXjqsXw4lc=
 github.com/derbylock/go-pluggable-extensions/plugins-lib v1.0.9/go.mod h1:874FZoDoR02OBOHFB2wBdxYP9KDumSOqXrnUSB8K9rE=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=

@@ -19,7 +19,7 @@ func main() {
 	// load required plugins
 	pluginsNames := []string{"../plugina/plugina"}
 	if err := pluginsManager.LoadPlugins(ctx, pluginsNames...); err != nil {
-		log.Fatal(err)
+		log.Fatal(fmt.Errorf("plugins loading failed: %w", err))
 	}
 
 	// execute extension hello
