@@ -91,7 +91,11 @@ func addWithOrderPrevention(
 		lastlyAdded = nil
 
 		// reverse extensionRuntimeInfos so that we'll add them in reversed order according to dependencies
-		extensionRuntimeInfoWithDependenciesInfosReversed := make([]*extensionRuntimeInfoWithDependenciesInfo, 0, len(extensionRuntimeInfoWithDependenciesInfos))
+		extensionRuntimeInfoWithDependenciesInfosReversed := make(
+			[]*extensionRuntimeInfoWithDependenciesInfo,
+			len(extensionRuntimeInfoWithDependenciesInfos),
+			len(extensionRuntimeInfoWithDependenciesInfos),
+		)
 		copy(extensionRuntimeInfoWithDependenciesInfosReversed, extensionRuntimeInfoWithDependenciesInfos)
 		slices.Reverse(extensionRuntimeInfoWithDependenciesInfosReversed)
 
