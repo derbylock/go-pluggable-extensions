@@ -109,7 +109,6 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 						break
 					}
 
-					m.Started(registerData.Secret)
 					m.mu.Lock()
 					m.channelByPluginID[registerData.PluginID] = c
 					for _, extensionConfig := range registerData.Extensions {
@@ -127,11 +126,13 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 						if err != nil {
 							m.mu.Unlock()
 							m.Failure(err)
+							break
 						}
 
 						m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID] = prioritizedExtensionRuntimeInfos
 					}
 					m.mu.Unlock()
+					m.Started(registerData.Secret)
 				case plugins.CommandTypeExecuteExtension:
 					m.mu.Lock()
 					if exit := func() bool {
