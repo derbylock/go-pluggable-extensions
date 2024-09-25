@@ -17,7 +17,7 @@ var cfg1 = plugins.ExtensionConfig{
 var cfg2 = plugins.ExtensionConfig{
 	ID:                 "plugina.hello.welcome",
 	ExtensionPointID:   "hello",
-	BeforeExtensionIDs: nil,
+	BeforeExtensionIDs: []string{"plugina.hello.currentDate"},
 	AfterExtensionIDs:  []string{"plugina.hello"},
 }
 
@@ -25,7 +25,7 @@ var cfg3 = plugins.ExtensionConfig{
 	ID:                 "plugina.hello.currentDate",
 	ExtensionPointID:   "hello",
 	BeforeExtensionIDs: []string{"plugina.hello.welcome"},
-	AfterExtensionIDs:  []string{"plugina.hello"},
+	AfterExtensionIDs:  []string{"plugina.hello", "plugina.init"},
 }
 
 func main() {

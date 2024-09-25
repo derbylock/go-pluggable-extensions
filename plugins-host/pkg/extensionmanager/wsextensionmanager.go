@@ -36,6 +36,7 @@ type WSManager struct {
 	pmsPort                                 int
 	mu                                      *sync.Mutex
 	pluginRegistrationChannel               chan string
+	managerErrorsChannel                    chan error
 	waiters                                 map[string]*WaiterInfo
 	pluginIDBySecret                        map[string]string
 	channelByPluginID                       map[string]*websocket.Conn
@@ -43,15 +44,17 @@ type WSManager struct {
 }
 
 func NewWSManager() *WSManager {
-	return &WSManager{
+	m := &WSManager{
 		mu:                                      &sync.Mutex{},
-		failureProcessor:                        panicFailureProcessor,
 		pluginRegistrationChannel:               make(chan string),
+		managerErrorsChannel:                    make(chan error),
 		waiters:                                 make(map[string]*WaiterInfo),
 		pluginIDBySecret:                        make(map[string]string),
 		channelByPluginID:                       make(map[string]*websocket.Conn),
 		extensionRuntimeInfoByExtensionPointIDs: make(map[string][]extensionRuntimeInfo),
 	}
+
+	return m.WithFailureProcessor(m.failureProcessor)
 }
 
 func (m *WSManager) WithDebug() *WSManager {
@@ -332,6 +335,10 @@ func (m *WSManager) AwaitPlugins(ctx context.Context, secrets []string) error {
 				return nil
 			}
 			m.mu.Unlock()
+		case err := <-m.managerErrorsChannel:
+			m.mu.Lock()
+			return err
+			m.mu.Unlock()
 		}
 	}
 }
@@ -340,6 +347,6 @@ func (m *WSManager) Failure(err error) {
 	m.failureProcessor(err)
 }
 
-func panicFailureProcessor(err error) {
-	panic(err)
+func (m *WSManager) DefaultFailureProcessor(err error) {
+	m.managerErrorsChannel <- err
 }
