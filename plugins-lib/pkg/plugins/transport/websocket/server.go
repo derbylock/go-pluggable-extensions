@@ -119,11 +119,12 @@ func (s *Server) Start() error {
 						return true
 					}
 
-					if err := json.Unmarshal(msg.Data, waiter.out); err != nil {
+					var outResult any
+					if err := json.Unmarshal(msg.Data, outResult); err != nil {
 						waiter.ch <- err
 						return true
 					}
-					waiter.ch <- waiter.out
+					waiter.ch <- outResult
 					if msg.IsFinal {
 						close(waiter.ch)
 					}
