@@ -166,74 +166,78 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 							break
 						}
 					} else {
-						var executeExtensionData pluginstypes.ExecuteExtensionData
-						if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
-							if errWrite := m.sendErrorResponse(msg, err, c); errWrite != nil {
-								m.Failure(errWrite)
-							}
-							break
-						}
-						results := ExecuteExtension[json.RawMessage, json.RawMessage](
-							m,
-							executeExtensionData.ExtensionPointID,
-							executeExtensionData.Data,
-						)
-						var lastResult *pluginstypes.Message
-						for result := range results {
-							if lastResult != nil {
-								if errWrite := m.writeResponse(*lastResult, c); errWrite != nil {
-									lastResult = nil
-									m.Failure(errWrite)
-									break
-								}
-								lastResult = nil
-							}
-
-							if result.Err != nil {
-								msgResponse := pluginstypes.Message{
-									CorrelationID: msg.MsgID,
-									Type:          pluginstypes.CommandTypeExecuteExtension,
-									Error: &pluginstypes.PluginError{
-										Type:    fmt.Sprintf("%s::%T", "plugins", result.Err),
-										Message: result.Err.Error(),
-									},
-									IsFinal: true,
-								}
-								if errWrite := m.writeResponse(msgResponse, c); errWrite != nil {
-									m.Failure(errWrite)
-								}
-								break
-							}
-
-							dataBytes, err := json.Marshal(result.Out)
-							if err != nil {
-								if errWrite := m.sendErrorResponse(
-									msg, fmt.Errorf("marshal output: %w", err), c); errWrite != nil {
-									m.Failure(errWrite)
-								}
-								break
-							}
-							msgResponse := pluginstypes.Message{
-								CorrelationID: msg.MsgID,
-								Type:          pluginstypes.CommandTypeExecuteExtension,
-								Data:          dataBytes,
-								IsFinal:       true,
-							}
-							lastResult = &msgResponse
-						}
-
-						if lastResult != nil {
-							if errWrite := m.writeResponse(*lastResult, c); errWrite != nil {
-								m.Failure(errWrite)
-								break
-							}
-						}
+						go m.processExecuteExtensionRequest(msg, c)
 					}
 				}
 			}
 			return false
 		}(); exit {
 			break
+		}
+	}
+}
+
+func (m *WSManager) processExecuteExtensionRequest(msg pluginstypes.Message, c *websocket.Conn) {
+	var executeExtensionData pluginstypes.ExecuteExtensionData
+	if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
+		if errWrite := m.sendErrorResponse(msg, err, c); errWrite != nil {
+			m.Failure(errWrite)
+		}
+		return
+	}
+	results := ExecuteExtension[json.RawMessage, json.RawMessage](
+		m,
+		executeExtensionData.ExtensionPointID,
+		executeExtensionData.Data,
+	)
+	var lastResult *pluginstypes.Message
+	for result := range results {
+		if lastResult != nil {
+			if errWrite := m.writeResponse(*lastResult, c); errWrite != nil {
+				lastResult = nil
+				m.Failure(errWrite)
+				break
+			}
+			lastResult = nil
+		}
+
+		if result.Err != nil {
+			msgResponse := pluginstypes.Message{
+				CorrelationID: msg.MsgID,
+				Type:          pluginstypes.CommandTypeExecuteExtension,
+				Error: &pluginstypes.PluginError{
+					Type:    fmt.Sprintf("%s::%T", "plugins", result.Err),
+					Message: result.Err.Error(),
+				},
+				IsFinal: true,
+			}
+			if errWrite := m.writeResponse(msgResponse, c); errWrite != nil {
+				m.Failure(errWrite)
+			}
+			break
+		}
+
+		dataBytes, err := json.Marshal(result.Out)
+		if err != nil {
+			if errWrite := m.sendErrorResponse(
+				msg, fmt.Errorf("marshal output: %w", err), c); errWrite != nil {
+				m.Failure(errWrite)
+			}
+			break
+		}
+		msgResponse := pluginstypes.Message{
+			CorrelationID: msg.MsgID,
+			Type:          pluginstypes.CommandTypeExecuteExtension,
+			Data:          dataBytes,
+			IsFinal:       true,
+		}
+		lastResult = &msgResponse
+	}
+
+	if lastResult != nil {
+		if errWrite := m.writeResponse(*lastResult, c); errWrite != nil {
+			m.Failure(errWrite)
+			return
 		}
 	}
 }
