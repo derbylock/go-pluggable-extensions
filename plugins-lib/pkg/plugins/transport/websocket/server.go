@@ -238,7 +238,7 @@ func ExecuteExtensions[IN any, OUT any](
 		}
 		msgDataBytes, err := json.Marshal(msgData)
 		if err != nil {
-			sendErrorExecuteExtensionResult(res, fmt.Errorf("marshal ExecuteExtensionData: %w", err))
+			ch <- fmt.Errorf("marshal ExecuteExtensionData: %w", err)
 			return
 		}
 
@@ -250,7 +250,7 @@ func ExecuteExtensions[IN any, OUT any](
 		}
 		sendMsgBytes, err := json.Marshal(sendMsg)
 		if err != nil {
-			sendErrorExecuteExtensionResult(res, fmt.Errorf("marshal plugins.Message: %w", err))
+			ch <- fmt.Errorf("marshal plugins.Message: %w", err)
 			return
 		}
 
@@ -265,14 +265,13 @@ func ExecuteExtensions[IN any, OUT any](
 		s.mu.Unlock()
 
 		if err := s.channel.WriteMessage(websocket.TextMessage, sendMsgBytes); err != nil {
-			sendErrorExecuteExtensionResult(res, fmt.Errorf("write message: %w", err))
+			ch <- fmt.Errorf("write message: %w", err)
 			delete(s.waiters, msgID)
 			return
 		}
 	}()
 
 	go func() {
-		defer close(res)
 		for o := range ch {
 			if err, ok := o.(error); ok {
 				sendErrorExecuteExtensionResult(res, err)
@@ -284,6 +283,7 @@ func ExecuteExtensions[IN any, OUT any](
 				Err: nil,
 			}
 		}
+		close(res)
 	}()
 
 	return res
