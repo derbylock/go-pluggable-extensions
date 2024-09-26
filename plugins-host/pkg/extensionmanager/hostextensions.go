@@ -34,7 +34,9 @@ func Extension[IN any, OUT any](m *WSManager, cfg types.ExtensionConfig, impleme
 				return o, e
 			}
 
-			return json.Marshal(o)
+			var rawJson json.RawMessage
+			rawJson, err := json.Marshal(o)
+			return rawJson, err
 		},
 	})
 
