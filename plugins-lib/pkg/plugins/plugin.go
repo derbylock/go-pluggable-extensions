@@ -5,27 +5,10 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/derbylock/go-pluggable-extensions/plugins-lib/pkg/plugins/transport/websocket"
+	types "github.com/derbylock/go-pluggable-extensions/plugins-lib/pkg/plugins/types"
 )
 
-type ExecuteExtensionResult[OUT any] struct {
-	Out OUT
-	Err error
-}
-
-type ExtensionRuntimeInfo struct {
-	cfg  ExtensionConfig
-	impl ExtensionImplementation[any, any]
-}
-
-func (e *ExtensionRuntimeInfo) Cfg() ExtensionConfig {
-	return e.cfg
-}
-
-func (e *ExtensionRuntimeInfo) Impl() ExtensionImplementation[any, any] {
-	return e.impl
-}
-
-var extensions = make(map[string]map[string]ExtensionRuntimeInfo, 0)
+var extensions = make(map[string]map[string]*types.ExtensionRuntimeInfo, 0)
 
 var pluginSecret string
 
@@ -35,22 +18,16 @@ func PluginContextID() string {
 	return pluginSecret
 }
 
-type ExtensionImplementation[IN any, OUT any] struct {
-	Process     func(ctx context.Context, in IN) (OUT, error)
-	Unmarshaler func(bytes []byte) (IN, error)
-	Marshaller  func(out OUT) ([]byte, error)
-}
-
-func Extension[IN any, OUT any](cfg ExtensionConfig, implementation func(ctx context.Context, in IN) (OUT, error)) {
+func Extension[IN any, OUT any](cfg types.ExtensionConfig, implementation func(ctx context.Context, in IN) (OUT, error)) {
 	currentExtensions, ok := extensions[cfg.ExtensionPointID]
 	if !ok {
-		currentExtensions = make(map[string]ExtensionRuntimeInfo)
+		currentExtensions = make(map[string]*types.ExtensionRuntimeInfo)
 	}
 
 	extensions[cfg.ExtensionPointID] = currentExtensions
-	currentExtensions[cfg.ID] = ExtensionRuntimeInfo{
-		cfg: cfg,
-		impl: ExtensionImplementation[any, any]{
+	currentExtensions[cfg.ID] = types.NewExtensionRuntimeInfo(
+		cfg,
+		types.ExtensionImplementation[any, any]{
 			Process: func(ctx context.Context, in any) (any, error) {
 				inTyped := in.(IN)
 				out, err := implementation(ctx, inTyped)
@@ -68,8 +45,7 @@ func Extension[IN any, OUT any](cfg ExtensionConfig, implementation func(ctx con
 				bytes, err := json.Marshal(out)
 				return bytes, err
 			},
-		},
-	}
+		})
 }
 
 func Start(pluginID string) error {
@@ -82,6 +58,6 @@ func Start(pluginID string) error {
 	return websocketServer.Start()
 }
 
-func ExecuteExtensions[IN any, OUT any](extensionPointID string, in IN) chan ExecuteExtensionResult[OUT] {
+func ExecuteExtensions[IN any, OUT any](extensionPointID string, in IN) chan types.ExecuteExtensionResult[OUT] {
 	return websocket.ExecuteExtensions[IN, OUT](websocketServer, extensionPointID, in)
 }

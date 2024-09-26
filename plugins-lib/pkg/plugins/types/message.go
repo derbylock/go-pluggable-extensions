@@ -1,4 +1,4 @@
-package plugins
+package pluginstypes
 
 import (
 	"encoding/json"
@@ -13,12 +13,12 @@ const (
 )
 
 type Message struct {
-	Type          CommandType     `json:"command"`
-	MsgID         string          `json:"msgID"`
+	Type    CommandType     `json:"command"`
+	MsgID   string          `json:"msgID"`
 	CorrelationID string          `json:"correlationID,omitempty"`
-	Data          json.RawMessage `json:"data,omitempty"`
-	Error         *PluginError    `json:"error,omitempty"`
-	IsFinal       bool            `json:"isFinal,omitempty"`
+	Data    json.RawMessage `json:"data,omitempty"`
+	Error   *PluginError    `json:"error,omitempty"`
+	IsFinal bool            `json:"isFinal,omitempty"`
 }
 
 type PluginError struct {

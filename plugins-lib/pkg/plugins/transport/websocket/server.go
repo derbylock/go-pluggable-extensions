@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/derbylock/go-pluggable-extensions/plugins-lib/pkg/plugins"
+	"github.com/derbylock/go-pluggable-extensions/plugins-lib/pkg/plugins/types"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"log"
@@ -21,7 +21,7 @@ type Server struct {
 	pluginID     string
 	pluginSecret string
 	pmsPort      int
-	extensions   map[string]map[string]plugins.ExtensionRuntimeInfo
+	extensions   map[string]map[string]*pluginstypes.ExtensionRuntimeInfo
 	channel      *websocket.Conn
 	mu           *sync.Mutex
 	waiters      map[string]*WaiterInfo
@@ -31,7 +31,7 @@ func NewServer(
 	pluginID string,
 	pluginSecret string,
 	pmsPort int,
-	extensions map[string]map[string]plugins.ExtensionRuntimeInfo,
+	extensions map[string]map[string]*pluginstypes.ExtensionRuntimeInfo,
 ) *Server {
 	return &Server{
 		pluginID:     pluginID,
@@ -59,16 +59,16 @@ func (s *Server) Start() error {
 	}()
 	s.channel = c
 
-	implementedExtensions := make([]plugins.ExtensionConfig, 0)
+	implementedExtensions := make([]pluginstypes.ExtensionConfig, 0)
 	for _, extensionInfos := range s.extensions {
 		for _, info := range extensionInfos {
 			implementedExtensions = append(implementedExtensions, info.Cfg())
 		}
 	}
 
-	msgRegister := plugins.RegisterPluginMessage{
-		Type: plugins.CommandTypeRegisterPlugin,
-		Data: plugins.RegisterPluginData{
+	msgRegister := pluginstypes.RegisterPluginMessage{
+		Type: pluginstypes.CommandTypeRegisterPlugin,
+		Data: pluginstypes.RegisterPluginData{
 			PluginID:   s.pluginID,
 			Secret:     s.pluginSecret,
 			Extensions: implementedExtensions,
@@ -93,13 +93,13 @@ func (s *Server) Start() error {
 
 		ctx := context.Background()
 
-		var msg plugins.Message
+		var msg pluginstypes.Message
 		if err := json.Unmarshal(msgBytes, &msg); err != nil {
 			return s.sendPluginErrorResponse(msg, fmt.Errorf("unmarshal message: %w", err), c)
 		}
 
 		switch msg.Type {
-		case plugins.CommandTypeExecuteExtension:
+		case pluginstypes.CommandTypeExecuteExtension:
 			if msg.CorrelationID != "" {
 				// plugin received invocation result
 				s.mu.Lock()
@@ -133,28 +133,29 @@ func (s *Server) Start() error {
 				}
 			} else {
 				// plugin extension invoked
-				var executeExtensionData plugins.ExecuteExtensionData
+				var executeExtensionData pluginstypes.ExecuteExtensionData
 				if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
 					return s.sendPluginErrorResponse(msg, err, c)
 				}
 				if exts, ok := s.extensions[executeExtensionData.ExtensionPointID]; ok {
 					if ext, ok := exts[executeExtensionData.ExtensionID]; ok {
+						extension := *ext
 						in, err := ext.Impl().Unmarshaler(executeExtensionData.Data)
 						if err != nil {
-							return s.sendExtensionErrorResponse(msg, ext, err, c)
+							return s.sendExtensionErrorResponse(msg, extension, err, c)
 						}
 						out, err := ext.Impl().Process(ctx, in)
 						if err != nil {
-							return s.sendExtensionErrorResponse(msg, ext, err, c)
+							return s.sendExtensionErrorResponse(msg, extension, err, c)
 						}
 						outBytes, err := ext.Impl().Marshaller(out)
 						if err != nil {
-							return s.sendExtensionErrorResponse(msg, ext, err, c)
+							return s.sendExtensionErrorResponse(msg, extension, err, c)
 						}
 
-						msgResponse := plugins.Message{
+						msgResponse := pluginstypes.Message{
 							CorrelationID: msg.MsgID,
-							Type:          plugins.CommandTypeExecuteExtension,
+							Type:          pluginstypes.CommandTypeExecuteExtension,
 							Data:          outBytes,
 							IsFinal:       true,
 						}
@@ -168,11 +169,11 @@ func (s *Server) Start() error {
 	}
 }
 
-func (s *Server) sendPluginErrorResponse(msg plugins.Message, err error, c *websocket.Conn) error {
-	msgResponse := plugins.Message{
+func (s *Server) sendPluginErrorResponse(msg pluginstypes.Message, err error, c *websocket.Conn) error {
+	msgResponse := pluginstypes.Message{
 		CorrelationID: msg.MsgID,
-		Type:          plugins.CommandTypeExecuteExtension,
-		Error: &plugins.PluginError{
+		Type:          pluginstypes.CommandTypeExecuteExtension,
+		Error: &pluginstypes.PluginError{
 			Type:    fmt.Sprintf("%s::%T", s.pluginID, err),
 			Message: err.Error(),
 		},
@@ -182,11 +183,11 @@ func (s *Server) sendPluginErrorResponse(msg plugins.Message, err error, c *webs
 	return errWrite
 }
 
-func (s *Server) sendExtensionErrorResponse(msg plugins.Message, ext plugins.ExtensionRuntimeInfo, err error, c *websocket.Conn) error {
-	msgResponse := plugins.Message{
+func (s *Server) sendExtensionErrorResponse(msg pluginstypes.Message, ext pluginstypes.ExtensionRuntimeInfo, err error, c *websocket.Conn) error {
+	msgResponse := pluginstypes.Message{
 		CorrelationID: msg.MsgID,
-		Type:          plugins.CommandTypeExecuteExtension,
-		Error: &plugins.PluginError{
+		Type:          pluginstypes.CommandTypeExecuteExtension,
+		Error: &pluginstypes.PluginError{
 			Type:    fmt.Sprintf("%s::%s::%T", s.pluginID, ext.Cfg().ID, err),
 			Message: err.Error(),
 		},
@@ -196,7 +197,7 @@ func (s *Server) sendExtensionErrorResponse(msg plugins.Message, ext plugins.Ext
 	return errWrite
 }
 
-func (s *Server) writeResponse(msgResponse plugins.Message, c *websocket.Conn) error {
+func (s *Server) writeResponse(msgResponse pluginstypes.Message, c *websocket.Conn) error {
 	msgResponseBytes, err := json.Marshal(msgResponse)
 	if err != nil {
 		return fmt.Errorf("marshal response: %w", err)
@@ -211,8 +212,8 @@ func ExecuteExtensions[IN any, OUT any](
 	s *Server,
 	extensionPointID string,
 	in IN,
-) chan plugins.ExecuteExtensionResult[OUT] {
-	res := make(chan plugins.ExecuteExtensionResult[OUT])
+) chan pluginstypes.ExecuteExtensionResult[OUT] {
+	res := make(chan pluginstypes.ExecuteExtensionResult[OUT])
 	inBytes, err := json.Marshal(in)
 	if err != nil {
 		sendErrorExecuteExtensionResult(res, fmt.Errorf("marshal input: %w", err))
@@ -221,7 +222,7 @@ func ExecuteExtensions[IN any, OUT any](
 	ch := make(chan any)
 	go func() {
 		msgID := uuid.NewString()
-		msgData := plugins.ExecuteExtensionData{
+		msgData := pluginstypes.ExecuteExtensionData{
 			ExtensionPointID: extensionPointID,
 			Data:             inBytes,
 		}
@@ -231,8 +232,8 @@ func ExecuteExtensions[IN any, OUT any](
 			return
 		}
 
-		sendMsg := &plugins.Message{
-			Type:    plugins.CommandTypeExecuteExtension,
+		sendMsg := &pluginstypes.Message{
+			Type:    pluginstypes.CommandTypeExecuteExtension,
 			MsgID:   msgID,
 			Data:    msgDataBytes,
 			IsFinal: true,
@@ -266,7 +267,7 @@ func ExecuteExtensions[IN any, OUT any](
 				return
 			}
 			oOut := o.(*OUT)
-			res <- plugins.ExecuteExtensionResult[OUT]{
+			res <- pluginstypes.ExecuteExtensionResult[OUT]{
 				Out: *oOut,
 				Err: nil,
 			}
@@ -276,9 +277,9 @@ func ExecuteExtensions[IN any, OUT any](
 	return res
 }
 
-func sendErrorExecuteExtensionResult[OUT any](res chan plugins.ExecuteExtensionResult[OUT], err error) {
+func sendErrorExecuteExtensionResult[OUT any](res chan pluginstypes.ExecuteExtensionResult[OUT], err error) {
 	var o OUT
-	res <- plugins.ExecuteExtensionResult[OUT]{
+	res <- pluginstypes.ExecuteExtensionResult[OUT]{
 		Out: o,
 		Err: err,
 	}
