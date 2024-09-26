@@ -19,12 +19,17 @@ Example of the error message:
 ```
 
 ## TODO:
-- [ ] Host extensions
-- [ ] Execute extension from plugin API
+
 - [ ] Logging service
 - [ ] Progress service
 
-- [ ] Auto update and download plugins
+- [ ] Remote plugins: auto update and download remote plugins
+
 - [ ] Parallel execution `ExecuteExtensionsParallel`
 
-- [ ] Rename `ExecuteExtension` to `ExecuteExtensions`
+## Done
+
+- [x] Extensions Ordering
+- [x] Host extensions
+- [x] Execute extension from plugin API
+- [x] Rename `ExecuteExtension` to `ExecuteExtensions`

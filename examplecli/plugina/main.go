@@ -48,7 +48,10 @@ func main() {
 		}, nil
 	})
 	plugins.Extension[string, HelloData](cfg2, func(ctx context.Context, in string) (HelloData, error) {
-		randomNumber := getRandomNumber()
+		randomNumber, err := getRandomNumber(ctx)
+		if err != nil {
+			return HelloData{}, err
+		}
 
 		return HelloData{
 			Message: fmt.Sprintf(`Welcome to an ordered plugins world, %s! Random number is: %d`, in, randomNumber),
@@ -67,7 +70,8 @@ func main() {
 		return 4, nil
 	})
 
-	if err := plugins.Start(pluginID); err != nil {
+	ctx := context.Background()
+	if err := plugins.Start(ctx, pluginID); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -75,19 +79,19 @@ func main() {
 // getRandomNumber returns some "random number"
 // it could be extended by Extensions for the "plugina.getRandomNumber" ExtensionPoint
 // For demoe we declared two Extensions (plugina.getRandomNumber.default and app.getRandomNumber) which returns different numbers and joined using bitwise XOR
-func getRandomNumber() int {
+func getRandomNumber(ctx context.Context) (int, error) {
 	extensionID := "plugina.getRandomNumber"
-	ch := plugins.ExecuteExtensions[string, int](extensionID, "")
+	ch := plugins.ExecuteExtensions[string, int](ctx, extensionID, "")
 
 	// iterate over channel to retrieve all results provided by extensions
 	randomNumber := 0
 	for e := range ch {
 		if e.Err != nil {
-			panic(e.Err)
+			return 0, fmt.Errorf("getRandomNumber failed: %w", e.Err)
 		}
 		randomNumber ^= e.Out
 	}
-	return randomNumber
+	return randomNumber, nil
 }
 
 type HelloData struct {
