@@ -16,8 +16,10 @@ func Extension[IN any, OUT any](m *WSManager, cfg types.ExtensionConfig, impleme
 		conn: nil,
 		cfg:  cfg,
 		hostImplementation: func(ctx context.Context, in any) (any, error) {
+			jsonInput := false
 			var i IN
 			if inBytes, ok := in.(json.RawMessage); ok {
+				jsonInput = true
 				// remote invocation
 				if err := json.Unmarshal(inBytes, &i); err != nil {
 					return nil, err
@@ -27,7 +29,12 @@ func Extension[IN any, OUT any](m *WSManager, cfg types.ExtensionConfig, impleme
 				i = in.(IN)
 			}
 
-			return implementation(ctx, i)
+			o, e := implementation(ctx, i)
+			if !jsonInput {
+				return o, e
+			}
+
+			return json.Marshal(o)
 		},
 	})
 
