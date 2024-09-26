@@ -176,7 +176,7 @@ func (m *WSManager) processExecuteExtensionRequest(ctx context.Context, msg plug
 		}
 		return
 	}
-	results := ExecuteExtension[json.RawMessage, json.RawMessage](
+	results := ExecuteExtensions[json.RawMessage, json.RawMessage](
 		ctx,
 		m,
 		executeExtensionData.ExtensionPointID,
@@ -260,7 +260,7 @@ func (w *WSManager) writeResponse(msgResponse pluginstypes.Message, c *websocket
 	return nil
 }
 
-func ExecuteExtension[IN any, OUT any](ctx context.Context, m *WSManager, extensionPointID string, in IN) chan pluginstypes.ExecuteExtensionResult[OUT] {
+func ExecuteExtensions[IN any, OUT any](ctx context.Context, m *WSManager, extensionPointID string, in IN) chan pluginstypes.ExecuteExtensionResult[OUT] {
 	m.mu.Lock()
 	extensionRuntimeInfos := m.extensionRuntimeInfoByExtensionPointIDs[extensionPointID]
 	m.mu.Unlock()
