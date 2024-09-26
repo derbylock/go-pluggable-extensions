@@ -4,20 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
-	"github.com/gorilla/websocket"
-	"log"
-	"net/url"
+	"github.com/derbylock/go-pluggable-extensions/plugins-lib/pkg/plugins/transport/websocket"
 )
+
+type ExecuteExtensionResult[OUT any] struct {
+	Out OUT
+	Err error
+}
 
 type ExtensionRuntimeInfo struct {
 	cfg  ExtensionConfig
 	impl ExtensionImplementation[any, any]
 }
 
+func (e *ExtensionRuntimeInfo) Cfg() ExtensionConfig {
+	return e.cfg
+}
+
+func (e *ExtensionRuntimeInfo) Impl() ExtensionImplementation[any, any] {
+	return e.impl
+}
+
 var extensions = make(map[string]map[string]ExtensionRuntimeInfo, 0)
 
 var pluginSecret string
+
+var websocketServer *websocket.Server
 
 func PluginContextID() string {
 	return pluginSecret
@@ -60,94 +72,16 @@ func Extension[IN any, OUT any](cfg ExtensionConfig, implementation func(ctx con
 	}
 }
 
-func Start(pluginID string) {
+func Start(pluginID string) error {
 	pmsSecret := flag.String("pms-secret", "", "")
 	pmsPort := flag.Int("pms-port", 0, "")
 	flag.Parse()
 	pluginSecret = *pmsSecret
 
-	serverAddr := fmt.Sprintf("127.0.0.1:%d", *pmsPort)
+	websocketServer = websocket.NewServer(pluginID, pluginSecret, *pmsPort, extensions)
+	return websocketServer.Start()
+}
 
-	u := url.URL{Scheme: "ws", Host: serverAddr, Path: "/"}
-
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		log.Fatal("dial:", err)
-	}
-	defer c.Close()
-
-	implementedExtensions := make([]ExtensionConfig, 0)
-	for _, extensionInfos := range extensions {
-		for _, info := range extensionInfos {
-			implementedExtensions = append(implementedExtensions, info.cfg)
-		}
-	}
-
-	msgRegister := RegisterPluginMessage{
-		Type: CommandTypeRegisterPlugin,
-		Data: RegisterPluginData{
-			PluginID:   pluginID,
-			Secret:     pluginSecret,
-			Extensions: implementedExtensions,
-		},
-		IsFinal: true,
-	}
-	msgRegisterBytes, _ := json.Marshal(msgRegister)
-	// TODO: process error
-	c.WriteMessage(websocket.TextMessage, msgRegisterBytes)
-	// TODO: process error
-
-	for {
-		_, msgBytes, err := c.ReadMessage()
-		if err != nil {
-			return
-		}
-
-		ctx := context.Background()
-
-		var msg Message
-		if err := json.Unmarshal(msgBytes, &msg); err != nil {
-			// TODO: process error
-		}
-
-		// TODO: process error
-
-		// TODO: Process commands
-		if msg.Type == CommandTypeExecuteExtension {
-			var executeExtensionData ExecuteExtensionData
-			if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
-				// TODO: process error
-			}
-			if exts, ok := extensions[executeExtensionData.ExtensionPointID]; ok {
-				if ext, ok := exts[executeExtensionData.ExtensionID]; ok {
-					in, err := ext.impl.Unmarshaler(executeExtensionData.Data)
-					if err != nil {
-						// TODO: process error
-					}
-					out, err := ext.impl.Process(ctx, in)
-					if err != nil {
-						// TODO: process error
-					}
-					outBytes, err := ext.impl.Marshaller(out)
-					if err != nil {
-						// TODO: process error
-					}
-
-					msgResponse := Message{
-						CorrelationID: msg.MsgID,
-						Type:          CommandTypeExecuteExtension,
-						Data:          outBytes,
-						IsFinal:       true,
-					}
-					msgResponseBytes, err := json.Marshal(msgResponse)
-					if err != nil {
-						log.Fatal(err)
-					}
-					// TODO: process error
-					c.WriteMessage(websocket.TextMessage, msgResponseBytes)
-				}
-			}
-		}
-	}
-
+func ExecuteExtension[IN any, OUT any](extensionPointID string, in IN) chan ExecuteExtensionResult[OUT] {
+	return websocket.ExecuteExtension[IN, OUT](websocketServer, extensionPointID, in)
 }
