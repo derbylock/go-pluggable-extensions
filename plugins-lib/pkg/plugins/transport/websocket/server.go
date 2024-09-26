@@ -98,80 +98,80 @@ func (s *Server) Start() error {
 			return s.sendPluginErrorResponse(msg, fmt.Errorf("unmarshal message: %w", err), c)
 		}
 
-		go func() {
-			if err := s.processRequest(msg, c, ctx); err != nil {
-				log.Fatal(err)
+		switch msg.Type {
+		case pluginstypes.CommandTypeExecuteExtension:
+			if msg.CorrelationID != "" {
+				// plugin received invocation result
+				if exit := func() bool {
+					if msg.IsFinal {
+						defer delete(s.waiters, msg.CorrelationID)
+					}
+					s.mu.Lock()
+					waiter, ok := s.waiters[msg.CorrelationID]
+					defer s.mu.Unlock()
+					if !ok {
+						log.Fatal(fmt.Errorf("unknown correlationID %s", msg.CorrelationID))
+						return true
+					}
+
+					if msg.Error != nil {
+						waiter.ch <- msg.Error
+						return true
+					}
+
+					if err := json.Unmarshal(msg.Data, waiter.out); err != nil {
+						waiter.ch <- err
+						return true
+					}
+					waiter.ch <- waiter.out
+					if msg.IsFinal {
+						close(waiter.ch)
+					}
+					return false
+				}(); exit {
+					break
+				}
+			} else {
+				go func() {
+					if err := s.processRequest(msg, c, ctx); err != nil {
+						log.Fatal(err)
+					}
+				}()
 			}
-		}()
+		}
 	}
 }
 
 func (s *Server) processRequest(msg pluginstypes.Message, c *websocket.Conn, ctx context.Context) error {
-	switch msg.Type {
-	case pluginstypes.CommandTypeExecuteExtension:
-		if msg.CorrelationID != "" {
-			// plugin received invocation result
-			if exit := func() bool {
-				if msg.IsFinal {
-					defer delete(s.waiters, msg.CorrelationID)
-				}
-				s.mu.Lock()
-				waiter, ok := s.waiters[msg.CorrelationID]
-				defer s.mu.Unlock()
-				if !ok {
-					log.Fatal(fmt.Errorf("unknown correlationID %s", msg.CorrelationID))
-					return true
-				}
-
-				if msg.Error != nil {
-					waiter.ch <- msg.Error
-					return true
-				}
-
-				if err := json.Unmarshal(msg.Data, waiter.out); err != nil {
-					waiter.ch <- err
-					return true
-				}
-				waiter.ch <- waiter.out
-				if msg.IsFinal {
-					close(waiter.ch)
-				}
-				return false
-			}(); exit {
-				break
+	// plugin extension invoked
+	var executeExtensionData pluginstypes.ExecuteExtensionData
+	if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
+		return s.sendPluginErrorResponse(msg, err, c)
+	}
+	if exts, ok := s.extensions[executeExtensionData.ExtensionPointID]; ok {
+		if ext, ok := exts[executeExtensionData.ExtensionID]; ok {
+			extension := *ext
+			in, err := ext.Impl().Unmarshaler(executeExtensionData.Data)
+			if err != nil {
+				return s.sendExtensionErrorResponse(msg, extension, err, c)
 			}
-		} else {
-			// plugin extension invoked
-			var executeExtensionData pluginstypes.ExecuteExtensionData
-			if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
-				return s.sendPluginErrorResponse(msg, err, c)
+			out, err := ext.Impl().Process(ctx, in)
+			if err != nil {
+				return s.sendExtensionErrorResponse(msg, extension, err, c)
 			}
-			if exts, ok := s.extensions[executeExtensionData.ExtensionPointID]; ok {
-				if ext, ok := exts[executeExtensionData.ExtensionID]; ok {
-					extension := *ext
-					in, err := ext.Impl().Unmarshaler(executeExtensionData.Data)
-					if err != nil {
-						return s.sendExtensionErrorResponse(msg, extension, err, c)
-					}
-					out, err := ext.Impl().Process(ctx, in)
-					if err != nil {
-						return s.sendExtensionErrorResponse(msg, extension, err, c)
-					}
-					outBytes, err := ext.Impl().Marshaller(out)
-					if err != nil {
-						return s.sendExtensionErrorResponse(msg, extension, err, c)
-					}
+			outBytes, err := ext.Impl().Marshaller(out)
+			if err != nil {
+				return s.sendExtensionErrorResponse(msg, extension, err, c)
+			}
 
-					msgResponse := pluginstypes.Message{
-						CorrelationID: msg.MsgID,
-						Type:          pluginstypes.CommandTypeExecuteExtension,
-						Data:          outBytes,
-						IsFinal:       true,
-					}
-					if errWrite := s.writeResponse(msgResponse, c); errWrite != nil {
-						return errWrite
-					}
-				}
+			msgResponse := pluginstypes.Message{
+				CorrelationID: msg.MsgID,
+				Type:          pluginstypes.CommandTypeExecuteExtension,
+				Data:          outBytes,
+				IsFinal:       true,
+			}
+			if errWrite := s.writeResponse(msgResponse, c); errWrite != nil {
+				return errWrite
 			}
 		}
 	}
