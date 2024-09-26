@@ -140,23 +140,94 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 					m.mu.Unlock()
 					m.Started(registerData.Secret)
 				case plugins.CommandTypeExecuteExtension:
-					m.mu.Lock()
-					if exit := func() bool {
-						defer m.mu.Unlock()
-						defer delete(m.waiters, msg.CorrelationID)
-						waiter, ok := m.waiters[msg.CorrelationID]
-						if !ok {
-							// TODO: handle error
-							return true
+					if msg.CorrelationID != "" {
+						m.mu.Lock()
+						if exit := func() bool {
+							defer m.mu.Unlock()
+							defer delete(m.waiters, msg.CorrelationID)
+							waiter, ok := m.waiters[msg.CorrelationID]
+							if !ok {
+								m.Failure(fmt.Errorf("unknown correlationID %s", msg.CorrelationID))
+								return true
+							}
+
+							if msg.Error != nil {
+								waiter.ch <- msg.Error
+								return true
+							}
+
+							if err := json.Unmarshal(msg.Data, waiter.out); err != nil {
+								waiter.ch <- err
+								return true
+							}
+							waiter.ch <- waiter.out
+							return false
+						}(); exit {
+							break
 						}
-						if err := json.Unmarshal(msg.Data, waiter.out); err != nil {
-							waiter.ch <- err
-							return true
+					} else {
+						var executeExtensionData plugins.ExecuteExtensionData
+						if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
+							if errWrite := m.sendErrorResponse(msg, err, c); errWrite != nil {
+								m.Failure(errWrite)
+							}
+							break
 						}
-						waiter.ch <- waiter.out
-						return false
-					}(); exit {
-						break
+						results := ExecuteExtension[json.RawMessage, json.RawMessage](
+							m,
+							executeExtensionData.ExtensionPointID,
+							executeExtensionData.Data,
+						)
+						var lastResult *plugins.Message
+						for result := range results {
+							if lastResult != nil {
+								if errWrite := m.writeResponse(*lastResult, c); errWrite != nil {
+									lastResult = nil
+									m.Failure(errWrite)
+									break
+								}
+								lastResult = nil
+							}
+
+							if result.Err != nil {
+								msgResponse := plugins.Message{
+									CorrelationID: msg.MsgID,
+									Type:          plugins.CommandTypeExecuteExtension,
+									Error: &plugins.PluginError{
+										Type:    fmt.Sprintf("%s::%T", "plugins", result.Err),
+										Message: result.Err.Error(),
+									},
+									IsFinal: true,
+								}
+								if errWrite := m.writeResponse(msgResponse, c); errWrite != nil {
+									m.Failure(errWrite)
+								}
+								break
+							}
+
+							dataBytes, err := json.Marshal(result.Out)
+							if err != nil {
+								if errWrite := m.sendErrorResponse(
+									msg, fmt.Errorf("marshal output: %w", err), c); errWrite != nil {
+									m.Failure(errWrite)
+								}
+								break
+							}
+							msgResponse := plugins.Message{
+								CorrelationID: msg.MsgID,
+								Type:          plugins.CommandTypeExecuteExtension,
+								Data:          dataBytes,
+								IsFinal:       true,
+							}
+							lastResult = &msgResponse
+						}
+
+						if lastResult != nil {
+							if errWrite := m.writeResponse(*lastResult, c); errWrite != nil {
+								m.Failure(errWrite)
+								break
+							}
+						}
 					}
 				}
 			}
@@ -164,32 +235,45 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 		}(); exit {
 			break
 		}
-		// log.Printf("recv: %s", message)
 	}
 }
 
-type ExecuteExtensionResult[OUT any] struct {
-	Out OUT
-	Err error
+func (w *WSManager) sendErrorResponse(msg plugins.Message, err error, c *websocket.Conn) error {
+	msgResponse := plugins.Message{
+		CorrelationID: msg.MsgID,
+		Type:          plugins.CommandTypeExecuteExtension,
+		Error: &plugins.PluginError{
+			Type:    fmt.Sprintf("%s::%T", "plugins", err),
+			Message: err.Error(),
+		},
+		IsFinal: true,
+	}
+	errWrite := w.writeResponse(msgResponse, c)
+	return errWrite
 }
 
-func ExecuteExtension[IN any, OUT any](m *WSManager, extensionPointID string, in IN) chan ExecuteExtensionResult[OUT] {
+func (w *WSManager) writeResponse(msgResponse plugins.Message, c *websocket.Conn) error {
+	msgResponseBytes, err := json.Marshal(msgResponse)
+	if err != nil {
+		return fmt.Errorf("marshal response: %w", err)
+	}
+	if err := c.WriteMessage(websocket.TextMessage, msgResponseBytes); err != nil {
+		return fmt.Errorf("write message to channel: %w", err)
+	}
+	return nil
+}
+
+func ExecuteExtension[IN any, OUT any](m *WSManager, extensionPointID string, in IN) chan plugins.ExecuteExtensionResult[OUT] {
 	m.mu.Lock()
 	extensionRuntimeInfos := m.extensionRuntimeInfoByExtensionPointIDs[extensionPointID]
 	m.mu.Unlock()
 
-	res := make(chan ExecuteExtensionResult[OUT])
+	res := make(chan plugins.ExecuteExtensionResult[OUT])
 	go func() {
 		for _, runtimeInfo := range extensionRuntimeInfos {
 			inBytes, err := json.Marshal(in)
 			if err != nil {
-				// TODO: process error
-				var o OUT
-				res <- ExecuteExtensionResult[OUT]{
-					Out: o,
-					Err: err,
-				}
-				close(res)
+				sendErrorExecuteExtensionResult(res, err)
 				return
 			}
 
@@ -201,13 +285,7 @@ func ExecuteExtension[IN any, OUT any](m *WSManager, extensionPointID string, in
 			}
 			msgDataBytes, err := json.Marshal(msgData)
 			if err != nil {
-				// TODO: process error
-				var o OUT
-				res <- ExecuteExtensionResult[OUT]{
-					Out: o,
-					Err: err,
-				}
-				close(res)
+				sendErrorExecuteExtensionResult(res, err)
 				return
 			}
 
@@ -219,13 +297,7 @@ func ExecuteExtension[IN any, OUT any](m *WSManager, extensionPointID string, in
 			}
 			sendMsgBytes, err := json.Marshal(sendMsg)
 			if err != nil {
-				// TODO: process error
-				var o OUT
-				res <- ExecuteExtensionResult[OUT]{
-					Out: o,
-					Err: err,
-				}
-				close(res)
+				sendErrorExecuteExtensionResult(res, err)
 				return
 			}
 
@@ -238,28 +310,16 @@ func ExecuteExtension[IN any, OUT any](m *WSManager, extensionPointID string, in
 			}
 			m.mu.Unlock()
 			if err := runtimeInfo.conn.WriteMessage(websocket.TextMessage, sendMsgBytes); err != nil {
-				// TODO: process error
-				var o OUT
-				res <- ExecuteExtensionResult[OUT]{
-					Out: o,
-					Err: err,
-				}
-				close(res)
+				sendErrorExecuteExtensionResult(res, err)
 				return
 			}
 			o := <-ch
 			if err, ok := o.(error); ok {
-				// TODO: process error
-				var o OUT
-				res <- ExecuteExtensionResult[OUT]{
-					Out: o,
-					Err: err,
-				}
-				close(res)
+				sendErrorExecuteExtensionResult(res, err)
 				return
 			}
 			oOut := o.(*OUT)
-			res <- ExecuteExtensionResult[OUT]{
+			res <- plugins.ExecuteExtensionResult[OUT]{
 				Out: *oOut,
 				Err: nil,
 			}
@@ -352,4 +412,13 @@ func (m *WSManager) Failure(err error) {
 
 func (m *WSManager) DefaultFailureProcessor(err error) {
 	m.managerErrorsChannel <- err
+}
+
+func sendErrorExecuteExtensionResult[OUT any](res chan plugins.ExecuteExtensionResult[OUT], err error) {
+	var o OUT
+	res <- plugins.ExecuteExtensionResult[OUT]{
+		Out: o,
+		Err: err,
+	}
+	close(res)
 }
