@@ -1,6 +1,9 @@
 package plugins
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type CommandType string
 
@@ -12,9 +15,19 @@ const (
 type Message struct {
 	Type          CommandType     `json:"command"`
 	MsgID         string          `json:"msgID"`
-	CorrelationID string          `json:"correlationID"`
-	Data          json.RawMessage `json:"data"`
-	IsFinal       bool            `json:"isFinal"`
+	CorrelationID string          `json:"correlationID,omitempty"`
+	Data          json.RawMessage `json:"data,omitempty"`
+	Error         *PluginError    `json:"error,omitempty"`
+	IsFinal       bool            `json:"isFinal,omitempty"`
+}
+
+type PluginError struct {
+	Type    string `json:"type,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+func (e PluginError) Error() string {
+	return fmt.Sprintf("plugin error %s: %s", e.Type, e.Message)
 }
 
 type RegisterPluginData struct {
@@ -33,7 +46,7 @@ type ExtensionConfig struct {
 type RegisterPluginMessage struct {
 	Type          CommandType        `json:"command"`
 	MsgID         string             `json:"msgID"`
-	CorrelationID string             `json:"correlationID"`
+	CorrelationID string             `json:"correlationID,omitempty"`
 	Data          RegisterPluginData `json:"data"`
 	IsFinal       bool               `json:"isFinal"`
 }
