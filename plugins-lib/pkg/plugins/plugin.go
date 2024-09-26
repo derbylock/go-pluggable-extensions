@@ -48,7 +48,7 @@ func Extension[IN any, OUT any](cfg types.ExtensionConfig, implementation func(c
 		})
 }
 
-func Start(pluginID string) error {
+func Start(ctx context.Context, pluginID string) error {
 	pmsSecret := flag.String("pms-secret", "", "")
 	pmsPort := flag.Int("pms-port", 0, "")
 	flag.Parse()
@@ -58,6 +58,6 @@ func Start(pluginID string) error {
 	return websocketServer.Start()
 }
 
-func ExecuteExtensions[IN any, OUT any](extensionPointID string, in IN) chan types.ExecuteExtensionResult[OUT] {
+func ExecuteExtensions[IN any, OUT any](ctx context.Context, extensionPointID string, in IN) chan types.ExecuteExtensionResult[OUT] {
 	return websocket.ExecuteExtensions[IN, OUT](websocketServer, extensionPointID, in)
 }
