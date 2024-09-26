@@ -14,21 +14,23 @@ import (
 	"context"
 	"fmt"
 	"github.com/derbylock/go-pluggable-extensions/plugins-lib/pkg/plugins"
+	pluginstypes "github.com/derbylock/go-pluggable-extensions/plugins-lib/pkg/plugins/types"
+	"log"
 	"time"
 )
 
-var cfg1 = plugins.ExtensionConfig{
+var cfg1 = pluginstypes.ExtensionConfig{
 	ID:               "plugina.hello",
 	ExtensionPointID: "hello",
 }
 
-var cfg2 = plugins.ExtensionConfig{
+var cfg2 = pluginstypes.ExtensionConfig{
 	ID:                "plugina.hello.welcome",
 	ExtensionPointID:  "hello",
 	AfterExtensionIDs: []string{"plugina.hello"},
 }
 
-var cfg3 = plugins.ExtensionConfig{
+var cfg3 = pluginstypes.ExtensionConfig{
 	ID:                 "plugina.hello.currentDate",
 	ExtensionPointID:   "hello",
 	BeforeExtensionIDs: []string{"plugina.hello.welcome"},
@@ -46,8 +48,10 @@ func main() {
 		}, nil
 	})
 	plugins.Extension[string, HelloData](cfg2, func(ctx context.Context, in string) (HelloData, error) {
+		randomNumber := getRandomNumber()
+
 		return HelloData{
-			Message: fmt.Sprintf(`Welcome to an ordered plugins world, %s!`, in),
+			Message: fmt.Sprintf(`Welcome to an ordered plugins world, %s! Random number is: %d`, in, randomNumber),
 		}, nil
 	})
 	plugins.Extension[string, HelloData](cfg3, func(ctx context.Context, in string) (HelloData, error) {
@@ -55,7 +59,35 @@ func main() {
 			Message: fmt.Sprintf(`Current date is %s.`, time.Now().Format(time.RFC3339)),
 		}, nil
 	})
-	plugins.Start(pluginID)
+
+	plugins.Extension[string, int](pluginstypes.ExtensionConfig{
+		ID:               "plugina.getRandomNumber.default",
+		ExtensionPointID: "plugina.getRandomNumber",
+	}, func(ctx context.Context, in string) (int, error) {
+		return 4, nil
+	})
+
+	if err := plugins.Start(pluginID); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// getRandomNumber returns some "random number"
+// it could be extended by Extensions for the "plugina.getRandomNumber" ExtensionPoint
+// For demoe we declared two Extensions (plugina.getRandomNumber.default and app.getRandomNumber) which returns different numbers and joined using bitwise XOR
+func getRandomNumber() int {
+	extensionID := "plugina.getRandomNumber"
+	ch := plugins.ExecuteExtensions[string, int](extensionID, "")
+
+	// iterate over channel to retrieve all results provided by extensions
+	randomNumber := 0
+	for e := range ch {
+		if e.Err != nil {
+			panic(e.Err)
+		}
+		randomNumber ^= e.Out
+	}
+	return randomNumber
 }
 
 type HelloData struct {
