@@ -160,7 +160,7 @@ func (s *Server) Start() error {
 	}
 }
 
-func ExecuteExtension[IN any, OUT any](
+func ExecuteExtensions[IN any, OUT any](
 	s *Server,
 	extensionPointID string,
 	in IN,

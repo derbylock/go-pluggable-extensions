@@ -82,6 +82,6 @@ func Start(pluginID string) error {
 	return websocketServer.Start()
 }
 
-func ExecuteExtension[IN any, OUT any](extensionPointID string, in IN) chan ExecuteExtensionResult[OUT] {
-	return websocket.ExecuteExtension[IN, OUT](websocketServer, extensionPointID, in)
+func ExecuteExtensions[IN any, OUT any](extensionPointID string, in IN) chan ExecuteExtensionResult[OUT] {
+	return websocket.ExecuteExtensions[IN, OUT](websocketServer, extensionPointID, in)
 }
