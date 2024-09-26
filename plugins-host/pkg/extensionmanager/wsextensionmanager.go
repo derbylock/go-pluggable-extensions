@@ -271,7 +271,7 @@ func ExecuteExtension[IN any, OUT any](ctx context.Context, m *WSManager, extens
 			if runtimeInfo.conn == nil {
 				out, err := runtimeInfo.hostImplementation(ctx, in)
 				res <- pluginstypes.ExecuteExtensionResult[OUT]{
-					Out: out,
+					Out: out.(OUT),
 					Err: err,
 				}
 				close(res)

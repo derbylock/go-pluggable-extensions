@@ -15,7 +15,7 @@ func Extension[IN any, OUT any](m *WSManager, cfg types.ExtensionConfig, impleme
 		conn: nil,
 		cfg:  cfg,
 		hostImplementation: func(ctx context.Context, in any) (any, error) {
-			return implementation(ctx, in)
+			return implementation(ctx, in.(IN))
 		},
 	})
 
