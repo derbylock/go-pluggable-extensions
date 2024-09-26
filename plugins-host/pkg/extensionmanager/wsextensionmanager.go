@@ -270,25 +270,7 @@ func ExecuteExtension[IN any, OUT any](ctx context.Context, m *WSManager, extens
 		for _, runtimeInfo := range extensionRuntimeInfos {
 			if runtimeInfo.conn == nil {
 				// host extension
-				var ii any
-				ii = in
-				var i IN
-				if inBytes, ok := ii.(json.RawMessage); ok {
-					// remote invocation
-					if err := json.Unmarshal(inBytes, &i); err != nil {
-						var o OUT
-						res <- pluginstypes.ExecuteExtensionResult[OUT]{
-							Out: o,
-							Err: err,
-						}
-						close(res)
-						return
-					}
-				} else {
-					// local invocation
-					i = in
-				}
-				out, err := runtimeInfo.hostImplementation(ctx, i)
+				out, err := runtimeInfo.hostImplementation(ctx, in)
 				res <- pluginstypes.ExecuteExtensionResult[OUT]{
 					Out: out.(OUT),
 					Err: err,

@@ -2,6 +2,7 @@ package extensionmanager
 
 import (
 	"context"
+	"encoding/json"
 	types "github.com/derbylock/go-pluggable-extensions/plugins-lib/pkg/plugins/types"
 )
 
@@ -15,7 +16,18 @@ func Extension[IN any, OUT any](m *WSManager, cfg types.ExtensionConfig, impleme
 		conn: nil,
 		cfg:  cfg,
 		hostImplementation: func(ctx context.Context, in any) (any, error) {
-			return implementation(ctx, in.(IN))
+			var i IN
+			if inBytes, ok := in.(json.RawMessage); ok {
+				// remote invocation
+				if err := json.Unmarshal(inBytes, &i); err != nil {
+					return nil, err
+				}
+			} else {
+				// local invocation
+				i = in.(IN)
+			}
+
+			return implementation(ctx, i)
 		},
 	})
 
