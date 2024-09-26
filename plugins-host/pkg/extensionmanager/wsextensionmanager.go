@@ -229,12 +229,13 @@ func (m *WSManager) processExecuteExtensionRequest(msg pluginstypes.Message, c *
 			CorrelationID: msg.MsgID,
 			Type:          pluginstypes.CommandTypeExecuteExtension,
 			Data:          dataBytes,
-			IsFinal:       true,
+			IsFinal:       false,
 		}
 		lastResult = &msgResponse
 	}
 
 	if lastResult != nil {
+		lastResult.IsFinal = true
 		if errWrite := m.writeResponse(*lastResult, c); errWrite != nil {
 			m.Failure(errWrite)
 			return
