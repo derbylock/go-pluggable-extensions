@@ -2,7 +2,6 @@ package pluginstypes
 
 import (
 	"encoding/json"
-	"fmt"
 )
 
 type CommandType string
@@ -13,12 +12,12 @@ const (
 )
 
 type Message struct {
-	Type    CommandType     `json:"command"`
-	MsgID   string          `json:"msgID"`
+	Type          CommandType     `json:"command"`
+	MsgID         string          `json:"msgID"`
 	CorrelationID string          `json:"correlationID,omitempty"`
-	Data    json.RawMessage `json:"data,omitempty"`
-	Error   *PluginError    `json:"error,omitempty"`
-	IsFinal bool            `json:"isFinal,omitempty"`
+	Data          json.RawMessage `json:"data,omitempty"`
+	Error         *PluginError    `json:"error,omitempty"`
+	IsFinal       bool            `json:"isFinal,omitempty"`
 }
 
 type PluginError struct {
@@ -27,7 +26,7 @@ type PluginError struct {
 }
 
 func (e PluginError) Error() string {
-	return fmt.Sprintf("plugin error %s: %s", e.Type, e.Message)
+	return e.Message
 }
 
 type RegisterPluginData struct {
