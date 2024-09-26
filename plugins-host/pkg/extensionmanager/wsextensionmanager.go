@@ -275,8 +275,11 @@ func ExecuteExtension[IN any, OUT any](ctx context.Context, m *WSManager, extens
 					Out: out.(OUT),
 					Err: err,
 				}
-				close(res)
-				return
+				if err != nil {
+					close(res)
+					return
+				}
+				continue
 			}
 
 			inBytes, err := json.Marshal(in)
