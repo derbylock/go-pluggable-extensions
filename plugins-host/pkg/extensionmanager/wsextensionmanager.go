@@ -23,8 +23,9 @@ type WaiterInfo struct {
 }
 
 type extensionRuntimeInfo struct {
-	conn *websocket.Conn
-	cfg  pluginstypes.ExtensionConfig
+	conn               *websocket.Conn
+	cfg                pluginstypes.ExtensionConfig
+	hostImplementation func(ctx context.Context, in any) (any, error)
 }
 
 type failureProcessor func(err error)
@@ -95,6 +96,7 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 			log.Println("read:", err)
 			break
 		}
+		ctx := context.Background()
 
 		if exit := func() bool {
 			if mt == websocket.TextMessage {
@@ -124,18 +126,7 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 							cfg:  extensionConfig,
 						})
 
-						// reorder channels according to order
-						prioritizedExtensionRuntimeInfos, err := OrderExtensionRuntimeInfo(currentExtensionRuntimeInfos)
-						if err != nil {
-							m.mu.Unlock()
-							m.Failure(err)
-
-							// lock to unlock after
-							m.mu.Lock()
-							break
-						}
-
-						m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID] = prioritizedExtensionRuntimeInfos
+						m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID] = currentExtensionRuntimeInfos
 					}
 					m.mu.Unlock()
 					m.Started(registerData.Secret)
@@ -166,7 +157,7 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 							break
 						}
 					} else {
-						go m.processExecuteExtensionRequest(msg, c)
+						go m.processExecuteExtensionRequest(ctx, msg, c)
 					}
 				}
 			}
@@ -177,7 +168,7 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *WSManager) processExecuteExtensionRequest(msg pluginstypes.Message, c *websocket.Conn) {
+func (m *WSManager) processExecuteExtensionRequest(ctx context.Context, msg pluginstypes.Message, c *websocket.Conn) {
 	var executeExtensionData pluginstypes.ExecuteExtensionData
 	if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
 		if errWrite := m.sendErrorResponse(msg, err, c); errWrite != nil {
@@ -186,6 +177,7 @@ func (m *WSManager) processExecuteExtensionRequest(msg pluginstypes.Message, c *
 		return
 	}
 	results := ExecuteExtension[json.RawMessage, json.RawMessage](
+		ctx,
 		m,
 		executeExtensionData.ExtensionPointID,
 		executeExtensionData.Data,
@@ -268,7 +260,7 @@ func (w *WSManager) writeResponse(msgResponse pluginstypes.Message, c *websocket
 	return nil
 }
 
-func ExecuteExtension[IN any, OUT any](m *WSManager, extensionPointID string, in IN) chan pluginstypes.ExecuteExtensionResult[OUT] {
+func ExecuteExtension[IN any, OUT any](ctx context.Context, m *WSManager, extensionPointID string, in IN) chan pluginstypes.ExecuteExtensionResult[OUT] {
 	m.mu.Lock()
 	extensionRuntimeInfos := m.extensionRuntimeInfoByExtensionPointIDs[extensionPointID]
 	m.mu.Unlock()
@@ -276,6 +268,16 @@ func ExecuteExtension[IN any, OUT any](m *WSManager, extensionPointID string, in
 	res := make(chan pluginstypes.ExecuteExtensionResult[OUT])
 	go func() {
 		for _, runtimeInfo := range extensionRuntimeInfos {
+			if runtimeInfo.conn == nil {
+				out, err := runtimeInfo.hostImplementation(ctx, in)
+				res <- pluginstypes.ExecuteExtensionResult[OUT]{
+					Out: out,
+					Err: err,
+				}
+				close(res)
+				return
+			}
+
 			inBytes, err := json.Marshal(in)
 			if err != nil {
 				sendErrorExecuteExtensionResult(res, err)
@@ -400,6 +402,19 @@ func (m *WSManager) AwaitPlugins(ctx context.Context, secrets []string) error {
 			delete(waitingSecrets, req)
 			if len(waitingSecrets) == 0 {
 				m.mu.Unlock()
+				// reorder channels according to order
+				for s, v := range m.extensionRuntimeInfoByExtensionPointIDs {
+					prioritizedExtensionRuntimeInfos, err := OrderExtensionRuntimeInfo(v)
+					if err != nil {
+						m.mu.Unlock()
+						m.Failure(err)
+
+						// lock to unlock after
+						m.mu.Lock()
+						break
+					}
+					m.extensionRuntimeInfoByExtensionPointIDs[s] = prioritizedExtensionRuntimeInfos
+				}
 				return nil
 			}
 			m.mu.Unlock()
