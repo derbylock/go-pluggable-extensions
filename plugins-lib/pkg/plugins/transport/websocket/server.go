@@ -14,7 +14,7 @@ import (
 
 type WaiterInfo struct {
 	ch  chan any
-	out any
+	out func() any
 }
 
 type Server struct {
@@ -119,7 +119,7 @@ func (s *Server) Start() error {
 						return true
 					}
 
-					var outResult any
+					outResult := waiter.out()
 					if err := json.Unmarshal(msg.Data, outResult); err != nil {
 						waiter.ch <- err
 						return true
@@ -255,10 +255,12 @@ func ExecuteExtensions[IN any, OUT any](
 		}
 
 		s.mu.Lock()
-		var out OUT
 		s.waiters[msgID] = &WaiterInfo{
-			ch:  ch,
-			out: &out,
+			ch: ch,
+			out: func() any {
+				var out OUT
+				return &out
+			},
 		}
 		s.mu.Unlock()
 
