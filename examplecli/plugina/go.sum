@@ -1,5 +1,5 @@
-github.com/derbylock/go-pluggable-extensions/plugins-lib v1.1.29 h1:sNp3hnd2nOKC8hjQdq3LKeuqEFcmphGKnTlvwxr6axo=
-github.com/derbylock/go-pluggable-extensions/plugins-lib v1.1.29/go.mod h1:NBLU3qLyS5+7vTEVm9V0G535upYElS1PPCV6kbsiYz0=
+github.com/derbylock/go-pluggable-extensions/plugins-lib v1.1.30 h1:mU7e/A/kqf4ZZMIIjS81TdvoPy+HnDHE50e0U8dQnF8=
+github.com/derbylock/go-pluggable-extensions/plugins-lib v1.1.30/go.mod h1:8vTsHH9XtsN8fMxWzILxdDEc8lNevJ4fFnGFyQ1kEz8=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=
