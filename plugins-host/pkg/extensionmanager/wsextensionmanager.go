@@ -371,15 +371,16 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 	var secrets []string
 
 	for _, cmd := range cmds {
+		pluginCommand := cmd
 		go func() {
 			secret := random.GenerateRandomString(64)
-			command := exec.Command(cmd, "-pms-port", strconv.Itoa(m.pmsPort), "-pms-secret", secret)
+			command := exec.Command(pluginCommand, "-pms-port", strconv.Itoa(m.pmsPort), "-pms-secret", secret)
 			if m.debug {
 				command.Stdout = os.Stdout
 				command.Stderr = os.Stderr
 			}
 			if err := command.Start(); err != nil {
-				m.managerErrorsChannel <- fmt.Errorf("can't start plugin %s: %w", cmd, err)
+				m.managerErrorsChannel <- fmt.Errorf("can't start plugin %s: %w", pluginCommand, err)
 			}
 			m.mu.Lock()
 			secrets = append(secrets, secret)
