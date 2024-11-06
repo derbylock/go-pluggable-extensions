@@ -59,9 +59,9 @@ Example of the error message:
 
 - **Why not [Hashicorp's go-plugin library](https://github.com/hashicorp/go-plugin)?**
     
-    The main reason is that it is mostly about another view on plugins. It is very good library with its pluses, but:
-    - it doesn't has simple way for extensions and extension points declaration, so it should be implemented anyway
-    - plugins has not simple way to execute host's functions. It could be done, but syntax is not simple enough.
+    The main reason is that it is mostly about another view about plugins. It is very good library with its pluses, but:
+    - it doesn't have simple way for extensions and extension points declaration, so it should be implemented anyway
+    - there is not simple way for plugins to execute host's functions. It could be done, but solution is not simple.
 
 ## TODO:
 
