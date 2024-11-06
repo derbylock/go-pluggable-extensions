@@ -12,12 +12,12 @@ const (
 )
 
 type Message struct {
-	Type          CommandType     `json:"command"`
-	MsgID         string          `json:"msgID"`
-	CorrelationID string          `json:"correlationID,omitempty"`
-	Data          json.RawMessage `json:"data,omitempty"`
-	Error         *PluginError    `json:"error,omitempty"`
-	IsFinal       bool            `json:"isFinal,omitempty"`
+	Type          CommandType     `json:"command"`                 // type of message
+	MsgID         string          `json:"msgID"`                   // unique ID of the message
+	CorrelationID string          `json:"correlationID,omitempty"` // empty for requests. equal to request's MsgID fo responses
+	Data          json.RawMessage `json:"data,omitempty"`          // data as a generic JSON object
+	Error         *PluginError    `json:"error,omitempty"`         // error, could be set in responses if request processing failed because of any reason
+	IsFinal       bool            `json:"isFinal,omitempty"`       // is set to true for responses when current response is the last response (when there are multiple responses to a single request)
 }
 
 type PluginError struct {
