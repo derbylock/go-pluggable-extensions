@@ -1,6 +1,6 @@
 # Go pluggable extensions
 
-This is the library which allows creating modular go applications using the WebSocket as a transport.
+This is the library which allows creating modular go applications using the WebSocket as a transport for communication.
 It spawns plugins as a child processes and allows them declare ExtensionPoints and implement them via Extensions.
 
 For details about internals, see [Protocol description](./protocol.md)
