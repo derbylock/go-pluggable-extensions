@@ -15,83 +15,107 @@ so the host could invoke them when required. For details, see RegisterPluginMess
 
 When some code want to execute Extensions for ExtensionPoint it sends request message with `"type": "executeExtension"`. Host server executes each extension for the specified extension point (in resolved order) and returns results as a responses to this request.
 
-## Sequence diagram  
+## Sequence diagrams 
 
-```plantuml
-@startuml
-!theme hacker
-participant Application as app
-participant "Plugin A" as plugin
-participant "Plugin B" as pluginb
+### Initialization
+```mermaid
+sequenceDiagram
+participant app as Application 
+participant plugin as "Plugin A" 
+participant pluginb as "Plugin B"
 
-== Initialization ==
-app -> app: Start WebSocket server on random unused port (<websocket-server-port>)
+app ->> app: Start WebSocket server on random unused port (<websocket-server-port>)
 
-app -> plugin: Shell execute ./plugina -pms-port <websocket-server-port> -pms-secret <secretStringA>
+app ->> plugin: Shell execute ./plugina -pms-port <websocket-server-port> -pms-secret <secretStringA>
 activate plugin
-app -> pluginb: Shell execute ./pluginb -pms-port <websocket-server-port> -pms-secret <secretStringB>
+app ->> pluginb: Shell execute ./pluginb -pms-port <websocket-server-port> -pms-secret <secretStringB>
 activate pluginb
  
-plugin -> app: HTTP UPGRADE /
-plugin -> app: ws: RegisterPluginMessage
+plugin ->> app: HTTP UPGRADE /
+plugin ->> app: ws: RegisterPluginMessage
 deactivate plugin
 
-pluginb -> app: HTTP UPGRADE /
-pluginb -> app: ws: RegisterPluginMessage
+pluginb ->> app: HTTP UPGRADE /
+pluginb ->> app: ws: RegisterPluginMessage
 deactivate pluginb
+```
 
-== Execute extension point from Application ==
-app -> plugin: Message[ExecuteExtensionData[Request]]
+### Execute extension point from Application implemented in Plugin A
+```mermaid
+sequenceDiagram
+participant app as Application
+participant plugin as "Plugin A"
+participant pluginb as "Plugin B"
+
+app ->> plugin: Message[ExecuteExtensionData[Request]]
 activate plugin
-plugin -> plugin: Do some logic
-plugin -> app: Message[Response]
+plugin ->> plugin: Do some logic
+plugin ->> app: Message[Response]
 deactivate plugin
+```
 
-== Execute extension point from Plugin which has extension in Application ==
-plugin -> app: Message[ExecuteExtensionData[Request]]
+### Execute extension point from Plugin which has extension in Application
+```mermaid
+sequenceDiagram
+participant app as Application
+participant plugin as "Plugin A"
+
+plugin ->> app: Message[ExecuteExtensionData[Request]]
 activate plugin
 activate app
-app -> app: Do some logic
-app -> plugin: Message[Response]
+app ->> app: Do some logic
+app ->> plugin: Message[Response]
 deactivate app
 deactivate plugin
+```
 
-== Execute extension point from Plugin A which has extension in Plugin B ==
-plugin -> app: Message[ExecuteExtensionData[Request]]
+### Execute extension point from Plugin A which has extension in Plugin B
+```mermaid
+sequenceDiagram
+participant app as Application
+participant plugin as "Plugin A"
+participant pluginb as "Plugin B"
+
+plugin ->> app: Message[ExecuteExtensionData[Request]]
 activate plugin
 activate app
-app -> pluginb: Message[ExecuteExtensionData[Request]]
+app ->> pluginb: Message[ExecuteExtensionData[Request]]
 activate pluginb
-pluginb -> pluginb: Do some logic
-pluginb -> app: Message[Response]
+pluginb ->> pluginb: Do some logic
+pluginb ->> app: Message[Response]
 deactivate pluginb
-app -> plugin: Message[Response]
+app ->> plugin: Message[Response]
 deactivate app
 deactivate plugin
+```
 
-== Execute extension point from Plugin A which has extensions in both Plugins and in Application in order pluginA->app->plugin B ==
-plugin -> app: Message[ExecuteExtensionData[Request]]
+### Execute extension point from Plugin A which has extensions in both Plugins and in Application in order pluginA->app->plugin B
+```mermaid
+sequenceDiagram
+participant app as Application
+participant plugin as "Plugin A"
+participant pluginb as "Plugin B"
+
+plugin ->> app: Message[ExecuteExtensionData[Request]]
 activate plugin
 activate app
 
-app -> plugin: Message[ExecuteExtensionData[Request]]
+app ->> plugin: Message[ExecuteExtensionData[Request]]
 activate plugin
-plugin -> plugin: Do plugin A logic
-plugin -> app: Message[Response #1]
+plugin ->> plugin: Do plugin A logic
+plugin ->> app: Message[Response 1]
 deactivate plugin
-app -> plugin: Message[Response #1]
+app ->> plugin: Message[Response 1]
 
-app -> app: Do application logic
-app -> plugin: Message[Response #2]
+app ->> app: Do application logic
+app ->> plugin: "Message[Response 2]
 
-app -> pluginb: Message[ExecuteExtensionData[Request]]
+app ->> pluginb: Message[ExecuteExtensionData[Request]]
 activate pluginb
-pluginb -> pluginb: Do plugin B logic
-pluginb -> app: Message[Response #3]
+pluginb ->> pluginb: Do plugin B logic
+pluginb ->> app: Message[Response 3]
 deactivate pluginb
-app -> plugin: Message[Response #3]
+app ->> plugin: Message[Response 3]
 deactivate app
 deactivate plugin
-
-@enduml
 ```
