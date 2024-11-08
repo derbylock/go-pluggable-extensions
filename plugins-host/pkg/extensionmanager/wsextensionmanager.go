@@ -63,6 +63,11 @@ func (m *WSManager) WithDebug() *WSManager {
 	return m
 }
 
+func (m *WSManager) WithFixedPort(port int) *WSManager {
+	m.pmsPort = port
+	return m
+}
+
 func (m *WSManager) WithFailureProcessor(p failureProcessor) *WSManager {
 	m.failureProcessor = p
 	return m
@@ -235,7 +240,7 @@ func (m *WSManager) processExecuteExtensionRequest(ctx context.Context, msg plug
 	}
 }
 
-func (w *WSManager) sendErrorResponse(msg pluginstypes.Message, err error, c *websocket.Conn) error {
+func (m *WSManager) sendErrorResponse(msg pluginstypes.Message, err error, c *websocket.Conn) error {
 	msgResponse := pluginstypes.Message{
 		CorrelationID: msg.MsgID,
 		Type:          pluginstypes.CommandTypeExecuteExtension,
@@ -245,11 +250,11 @@ func (w *WSManager) sendErrorResponse(msg pluginstypes.Message, err error, c *we
 		},
 		IsFinal: true,
 	}
-	errWrite := w.writeResponse(msgResponse, c)
+	errWrite := m.writeResponse(msgResponse, c)
 	return errWrite
 }
 
-func (w *WSManager) writeResponse(msgResponse pluginstypes.Message, c *websocket.Conn) error {
+func (m *WSManager) writeResponse(msgResponse pluginstypes.Message, c *websocket.Conn) error {
 	msgResponseBytes, err := json.Marshal(msgResponse)
 	if err != nil {
 		return fmt.Errorf("marshal response: %w", err)
@@ -343,6 +348,10 @@ func ExecuteExtensions[IN any, OUT any](ctx context.Context, m *WSManager, exten
 
 func (m *WSManager) Listen() error {
 	var err error
+	address := "127.0.0.1:"
+	if m.pmsPort != 0 {
+		address += strconv.Itoa(m.pmsPort)
+	}
 	m.lis, err = net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		log.Fatal("listen error:", err)
@@ -404,7 +413,7 @@ func (m *WSManager) AwaitPlugins(ctx context.Context, secrets []string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("awaiting plugins inititialization: %w", ctx.Err())
+			return fmt.Errorf("awaiting plugins initialization: %w", ctx.Err())
 		case req := <-m.pluginRegistrationChannel:
 			m.mu.Lock()
 			delete(waitingSecrets, req)
