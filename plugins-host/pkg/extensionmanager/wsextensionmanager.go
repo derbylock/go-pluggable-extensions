@@ -50,7 +50,7 @@ type WSManager struct {
 func NewWSManager() *WSManager {
 	m := &WSManager{
 		mu:                                      &sync.Mutex{},
-		logger:                                  &slog.Logger{},
+		logger:                                  slog.Default(),
 		pluginRegistrationChannel:               make(chan string),
 		managerErrorsChannel:                    make(chan error),
 		waitersByRequestID:                      make(map[string]*WaiterInfo),
