@@ -40,6 +40,46 @@ pluginb ->> app: ws: RegisterPluginMessage
 deactivate pluginb
 ```
 
+Example of the message sent by plugin (from the [examplecli](./examplecli)):
+```json
+{
+  "command": "registerPlugin",
+  "data": {
+    "pluginID": "plugin.A",
+    "secret": "Mp87uPLgkfQpYoJ2cuasAqyU3HUKQZdBTXvrWzAU3DoDDcB4rNj92cauQO75k536",
+    "extensions": [
+      {
+        "ID": "plugina.hello",
+        "ExtensionPointID": "hello"
+      },
+      {
+        "ID": "plugina.hello.welcome",
+        "ExtensionPointID": "hello",
+        "AfterExtensionIDs": [
+          "plugina.hello"
+        ]
+      },
+      {
+        "ID": "plugina.hello.currentDate",
+        "ExtensionPointID": "hello",
+        "BeforeExtensionIDs": [
+          "plugina.hello.welcome"
+        ],
+        "AfterExtensionIDs": [
+          "plugina.hello",
+          "plugina.init"
+        ]
+      },
+      {
+        "ID": "plugina.getRandomNumber.default",
+        "ExtensionPointID": "plugina.getRandomNumber"
+      }
+    ]
+  },
+  "isFinal": true
+}
+```
+
 ### Execute extension point from Application implemented in Plugin A
 ```mermaid
 sequenceDiagram
@@ -52,6 +92,32 @@ activate plugin
 plugin ->> plugin: Do some logic
 plugin ->> app: Message[Response]
 deactivate plugin
+```
+
+Example of the message sent by the app to the plugin (from the [examplecli](./examplecli)):
+```json
+{
+  "command": "executeExtension",
+  "msgID": "5fea8d50-6fa6-4ed2-8317-2eea48c0ad61",
+  "data": {
+    "extensionPointID": "hello",
+    "extensionID": "plugina.hello",
+    "data": "Anton"
+  },
+  "isFinal": true
+}
+```
+
+Example of the message sent by the plugin to the app (from the [examplecli](./examplecli)):
+```json
+{
+  "command": "executeExtension",
+  "correlationID": "5fea8d50-6fa6-4ed2-8317-2eea48c0ad61",
+  "data": {
+    "message": "Hello Anton from plugin A!"
+  },
+  "isFinal": true
+}
 ```
 
 ### Execute extension point from Plugin which has extension in Application

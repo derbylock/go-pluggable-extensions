@@ -44,7 +44,7 @@ func main() {
 	const pluginID = "plugin.A"
 	plugins.Extension[string, HelloData](cfg1, func(ctx context.Context, in string) (HelloData, error) {
 		return HelloData{
-			Message: fmt.Sprintf(`Hello %s from plugin A! %s`, in, plugins.PluginContextID()),
+			Message: fmt.Sprintf(`Hello %s from the plugin A!`, in),
 		}, nil
 	})
 	plugins.Extension[string, HelloData](cfg2, func(ctx context.Context, in string) (HelloData, error) {
