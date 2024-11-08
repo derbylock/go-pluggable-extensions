@@ -25,6 +25,7 @@ type WaiterInfo struct {
 
 type extensionRuntimeInfo struct {
 	conn               *websocket.Conn
+	connWaiters        map[string]*WaiterInfo
 	cfg                pluginstypes.ExtensionConfig
 	hostImplementation func(ctx context.Context, in any) (any, error)
 }
@@ -40,7 +41,7 @@ type WSManager struct {
 	mu                                      *sync.Mutex
 	pluginRegistrationChannel               chan string
 	managerErrorsChannel                    chan error
-	waiters                                 map[string]*WaiterInfo
+	waitersByRequestID                      map[string]*WaiterInfo
 	pluginIDBySecret                        map[string]string
 	channelByPluginID                       map[string]*websocket.Conn
 	extensionRuntimeInfoByExtensionPointIDs map[string][]extensionRuntimeInfo
@@ -52,7 +53,7 @@ func NewWSManager() *WSManager {
 		logger:                                  &slog.Logger{},
 		pluginRegistrationChannel:               make(chan string),
 		managerErrorsChannel:                    make(chan error),
-		waiters:                                 make(map[string]*WaiterInfo),
+		waitersByRequestID:                      make(map[string]*WaiterInfo),
 		pluginIDBySecret:                        make(map[string]string),
 		channelByPluginID:                       make(map[string]*websocket.Conn),
 		extensionRuntimeInfoByExtensionPointIDs: make(map[string][]extensionRuntimeInfo),
@@ -102,6 +103,7 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 		log.Print("upgrade:", err)
 		return
 	}
+	connWaiters := make(map[string]*WaiterInfo)
 	defer c.Close()
 	for {
 		mt, inMsg, err := c.ReadMessage()
@@ -144,12 +146,23 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 							currentExtensionRuntimeInfos = make([]extensionRuntimeInfo, 0)
 						}
 						currentExtensionRuntimeInfos = append(currentExtensionRuntimeInfos, extensionRuntimeInfo{
-							conn: c,
-							cfg:  extensionConfig,
+							conn:        c,
+							connWaiters: connWaiters,
+							cfg:         extensionConfig,
 						})
 
 						m.extensionRuntimeInfoByExtensionPointIDs[extensionConfig.ExtensionPointID] = currentExtensionRuntimeInfos
 					}
+					ch := c.CloseHandler()
+					c.SetCloseHandler(func(code int, text string) error {
+						for _, wi := range connWaiters {
+							wi.ch <- fmt.Errorf("plugin failed before processing finished")
+						}
+						m.mu.Lock()
+						connWaiters = make(map[string]*WaiterInfo)
+						m.mu.Unlock()
+						return ch(code, text)
+					})
 					m.mu.Unlock()
 					m.Started(registerData.Secret)
 				case pluginstypes.CommandTypeExecuteExtension:
@@ -157,8 +170,9 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 						m.mu.Lock()
 						if exit := func() bool {
 							defer m.mu.Unlock()
-							defer delete(m.waiters, msg.CorrelationID)
-							waiter, ok := m.waiters[msg.CorrelationID]
+							defer delete(m.waitersByRequestID, msg.CorrelationID)
+							defer delete(connWaiters, msg.CorrelationID)
+							waiter, ok := m.waitersByRequestID[msg.CorrelationID]
 							if !ok {
 								m.Failure(fmt.Errorf("unknown correlationID %s", msg.CorrelationID))
 								return true
@@ -345,10 +359,12 @@ func ExecuteExtensions[IN any, OUT any](ctx context.Context, m *WSManager, exten
 			ch := make(chan any)
 			m.mu.Lock()
 			var out OUT
-			m.waiters[msgID] = &WaiterInfo{
+			newWaiterInfo := &WaiterInfo{
 				ch:  ch,
 				out: &out,
 			}
+			m.waitersByRequestID[msgID] = newWaiterInfo
+			runtimeInfo.connWaiters[msgID] = newWaiterInfo
 			m.mu.Unlock()
 			if m.debug {
 				m.logger.Debug(
