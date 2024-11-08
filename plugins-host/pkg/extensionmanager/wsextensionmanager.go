@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -32,6 +33,7 @@ type failureProcessor func(err error)
 
 type WSManager struct {
 	debug                                   bool
+	logger                                  *slog.Logger
 	failureProcessor                        failureProcessor
 	lis                                     net.Listener
 	pmsPort                                 int
@@ -47,6 +49,7 @@ type WSManager struct {
 func NewWSManager() *WSManager {
 	m := &WSManager{
 		mu:                                      &sync.Mutex{},
+		logger:                                  &slog.Logger{},
 		pluginRegistrationChannel:               make(chan string),
 		managerErrorsChannel:                    make(chan error),
 		waiters:                                 make(map[string]*WaiterInfo),
@@ -65,6 +68,11 @@ func (m *WSManager) WithDebug() *WSManager {
 
 func (m *WSManager) WithFixedPort(port int) *WSManager {
 	m.pmsPort = port
+	return m
+}
+
+func (m *WSManager) WithLogger(logger *slog.Logger) *WSManager {
+	m.logger = logger
 	return m
 }
 
@@ -98,8 +106,17 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 	for {
 		mt, inMsg, err := c.ReadMessage()
 		if err != nil {
-			log.Println("read:", err)
+			m.logger.Error("read message", slog.String("err", err.Error()))
 			break
+		}
+
+		if m.debug {
+			m.logger.Debug(
+				"Received message",
+				slog.String("localAddr", c.LocalAddr().String()),
+				slog.String("remoteAddr", c.RemoteAddr().String()),
+				slog.String("msg", string(inMsg)),
+			)
 		}
 		ctx := context.Background()
 
@@ -259,6 +276,14 @@ func (m *WSManager) writeResponse(msgResponse pluginstypes.Message, c *websocket
 	if err != nil {
 		return fmt.Errorf("marshal response: %w", err)
 	}
+	if m.debug {
+		m.logger.Debug(
+			"Write message",
+			slog.String("localAddr", c.LocalAddr().String()),
+			slog.String("remoteAddr", c.RemoteAddr().String()),
+			slog.String("msg", string(msgResponseBytes)),
+		)
+	}
 	if err := c.WriteMessage(websocket.TextMessage, msgResponseBytes); err != nil {
 		return fmt.Errorf("write message to channel: %w", err)
 	}
@@ -325,6 +350,14 @@ func ExecuteExtensions[IN any, OUT any](ctx context.Context, m *WSManager, exten
 				out: &out,
 			}
 			m.mu.Unlock()
+			if m.debug {
+				m.logger.Debug(
+					"Write message",
+					slog.String("localAddr", runtimeInfo.conn.LocalAddr().String()),
+					slog.String("remoteAddr", runtimeInfo.conn.RemoteAddr().String()),
+					slog.String("msg", string(sendMsgBytes)),
+				)
+			}
 			if err := runtimeInfo.conn.WriteMessage(websocket.TextMessage, sendMsgBytes); err != nil {
 				sendErrorExecuteExtensionResult(res, err)
 				return
@@ -424,9 +457,7 @@ func (m *WSManager) AwaitPlugins(ctx context.Context, secrets []string) error {
 			}
 			m.mu.Unlock()
 		case err := <-m.managerErrorsChannel:
-			m.mu.Lock()
 			return err
-			m.mu.Unlock()
 		}
 	}
 }
