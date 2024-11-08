@@ -111,6 +111,7 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 			if m.logger.Enabled(context.Background(), slog.LevelDebug) {
 				m.logger.Debug("read message", slog.String("err", err.Error()))
 			}
+			connWaiters = m.processChannelClosing(connWaiters)
 			break
 		}
 
@@ -157,18 +158,7 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 					}
 					ch := c.CloseHandler()
 					c.SetCloseHandler(func(code int, text string) error {
-						var wis []*WaiterInfo
-						m.mu.Lock()
-						for _, wi := range connWaiters {
-							wis = append(wis, wi)
-						}
-						connWaiters = make(map[string]*WaiterInfo)
-						m.mu.Unlock()
-
-						for _, wi := range wis {
-							wi.ch <- fmt.Errorf("plugin failed before processing finished")
-						}
-
+						connWaiters = m.processChannelClosing(connWaiters)
 						return ch(code, text)
 					})
 					m.mu.Unlock()
@@ -210,6 +200,21 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+}
+
+func (m *WSManager) processChannelClosing(connWaiters map[string]*WaiterInfo) map[string]*WaiterInfo {
+	var wis []*WaiterInfo
+	m.mu.Lock()
+	for _, wi := range connWaiters {
+		wis = append(wis, wi)
+	}
+	connWaiters = make(map[string]*WaiterInfo)
+	m.mu.Unlock()
+
+	for _, wi := range wis {
+		wi.ch <- fmt.Errorf("plugin failed before processing finished")
+	}
+	return connWaiters
 }
 
 func (m *WSManager) processExecuteExtensionRequest(ctx context.Context, msg pluginstypes.Message, c *websocket.Conn) {
