@@ -155,12 +155,18 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 					}
 					ch := c.CloseHandler()
 					c.SetCloseHandler(func(code int, text string) error {
-						for _, wi := range connWaiters {
-							wi.ch <- fmt.Errorf("plugin failed before processing finished")
-						}
+						var wis []*WaiterInfo
 						m.mu.Lock()
+						for _, wi := range connWaiters {
+							wis = append(wis, wi)
+						}
 						connWaiters = make(map[string]*WaiterInfo)
 						m.mu.Unlock()
+
+						for _, wi := range wis {
+							wi.ch <- fmt.Errorf("plugin failed before processing finished")
+						}
+
 						return ch(code, text)
 					})
 					m.mu.Unlock()
