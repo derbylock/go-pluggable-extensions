@@ -100,7 +100,7 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{}
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Print("upgrade:", err)
+		m.logger.Error("upgrade:", slog.String("err", err.Error()))
 		return
 	}
 	connWaiters := make(map[string]*WaiterInfo)
@@ -108,12 +108,14 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 	for {
 		mt, inMsg, err := c.ReadMessage()
 		if err != nil {
-			m.logger.Error("read message", slog.String("err", err.Error()))
+			if m.logger.Enabled(context.Background(), slog.LevelDebug) {
+				m.logger.Debug("read message", slog.String("err", err.Error()))
+			}
 			break
 		}
 
 		if m.debug {
-			m.logger.Debug(
+			m.logger.Info(
 				"Received message",
 				slog.String("localAddr", c.LocalAddr().String()),
 				slog.String("remoteAddr", c.RemoteAddr().String()),
@@ -297,7 +299,7 @@ func (m *WSManager) writeResponse(msgResponse pluginstypes.Message, c *websocket
 		return fmt.Errorf("marshal response: %w", err)
 	}
 	if m.debug {
-		m.logger.Debug(
+		m.logger.Info(
 			"Write message",
 			slog.String("localAddr", c.LocalAddr().String()),
 			slog.String("remoteAddr", c.RemoteAddr().String()),
@@ -373,7 +375,7 @@ func ExecuteExtensions[IN any, OUT any](ctx context.Context, m *WSManager, exten
 			runtimeInfo.connWaiters[msgID] = newWaiterInfo
 			m.mu.Unlock()
 			if m.debug {
-				m.logger.Debug(
+				m.logger.Info(
 					"Write message",
 					slog.String("localAddr", runtimeInfo.conn.LocalAddr().String()),
 					slog.String("remoteAddr", runtimeInfo.conn.RemoteAddr().String()),
