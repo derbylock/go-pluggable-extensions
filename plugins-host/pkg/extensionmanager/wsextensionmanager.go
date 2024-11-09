@@ -433,8 +433,9 @@ func (m *WSManager) listen() error {
 }
 
 func (m *WSManager) startServer() error {
-	http.HandleFunc("/", m.handle)
-	return http.Serve(m.lis, nil)
+	mux := &http.ServeMux{}
+	mux.HandleFunc("/", m.handle)
+	return http.Serve(m.lis, mux)
 }
 
 type WSRegisterArgs struct {
