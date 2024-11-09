@@ -21,10 +21,21 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
-      - name: golangci-lint
+      - name: golangci-lint lib
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.60
+          working-directory: plugins-lib
+      - name: golangci-lint host
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60
+          working-directory: plugins-host
+      - name: golangci-lint example
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60
+          working-directory: examplecli
           
   build:
     runs-on: ubuntu-latest
