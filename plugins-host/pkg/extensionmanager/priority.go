@@ -98,7 +98,6 @@ func addWithOrderPrevention(
 		extensionRuntimeInfoWithDependenciesInfosReversed := make(
 			[]*extensionRuntimeInfoWithDependenciesInfo,
 			len(extensionRuntimeInfoWithDependenciesInfos),
-			len(extensionRuntimeInfoWithDependenciesInfos),
 		)
 		copy(extensionRuntimeInfoWithDependenciesInfosReversed, extensionRuntimeInfoWithDependenciesInfos)
 		slices.Reverse(extensionRuntimeInfoWithDependenciesInfosReversed)
