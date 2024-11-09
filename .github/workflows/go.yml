@@ -31,12 +31,18 @@ jobs:
         with:
           version: v1.60
           working-directory: plugins-host
-      - name: golangci-lint example
+      - name: golangci-lint example plugina
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.60
-          working-directory: examplecli
-          
+          working-directory: examplecli/plugina
+
+      - name: golangci-lint example app
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60
+          working-directory: examplecli/app
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -55,8 +61,12 @@ jobs:
       working-directory: plugins-host
       run: go vet ./...
 
-    - name: Lint example
-      working-directory: examplecli
+    - name: Lint example plugina
+      working-directory: examplecli/plugina
+      run: go vet ./...
+
+    - name: Lint example app
+      working-directory: examplecli/app
       run: go vet ./...
 
     - name: Build lib
@@ -67,8 +77,12 @@ jobs:
       working-directory: plugins-host
       run: go build -v ./...
 
-    - name: Build example
-      working-directory: examplecli
+    - name: Build example plugina
+      working-directory: examplecli/plugina
+      run: go build -v ./...
+
+    - name: Build example app
+      working-directory: examplecli/app
       run: go build -v ./...
 
     - name: Test lib
@@ -79,6 +93,10 @@ jobs:
       working-directory: plugins-host
       run: go test -v ./...
 
-    - name: Test example
-      working-directory: examplecli
+    - name: Test example plugina
+      working-directory: examplecli/plugina
+      run: go test -v ./...
+    
+    - name: Test example app
+      working-directory: examplecli/app
       run: go test -v ./...
