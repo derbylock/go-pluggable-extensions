@@ -77,8 +77,8 @@ func (s *Client) Start() error {
 		case pluginstypes.CommandTypeExecuteExtension:
 			if msg.CorrelationID != "" {
 				// plugin received invocation result
-				if exit := s.processExecutionResultMessage(msg); exit {
-					break
+				if err := s.processExecutionResultMessage(msg); err != nil {
+					log.Fatal(err)
 				}
 			} else {
 				// plugin received invocation request
@@ -168,7 +168,7 @@ func (s *Client) processRequest(msg pluginstypes.Message, c *websocket.Conn, ctx
 	return nil
 }
 
-func (s *Client) processExecutionResultMessage(msg pluginstypes.Message) bool {
+func (s *Client) processExecutionResultMessage(msg pluginstypes.Message) error {
 	if msg.IsFinal {
 		defer delete(s.waiters, msg.CorrelationID)
 	}
@@ -176,25 +176,24 @@ func (s *Client) processExecutionResultMessage(msg pluginstypes.Message) bool {
 	waiter, ok := s.waiters[msg.CorrelationID]
 	defer s.mu.Unlock()
 	if !ok {
-		log.Fatal(fmt.Errorf("unknown correlationID %s", msg.CorrelationID))
-		return true
+		return fmt.Errorf("unknown correlationID %s", msg.CorrelationID)
 	}
 
 	if msg.Error != nil {
 		waiter.ch <- msg.Error
-		return true
+		return msg.Error
 	}
 
 	outResult := waiter.out()
 	if err := json.Unmarshal(msg.Data, outResult); err != nil {
 		waiter.ch <- err
-		return true
+		return err
 	}
 	waiter.ch <- outResult
 	if msg.IsFinal {
 		close(waiter.ch)
 	}
-	return false
+	return nil
 }
 
 func (s *Client) sendPluginErrorResponse(msg pluginstypes.Message, err error, c *websocket.Conn) error {
