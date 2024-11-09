@@ -32,6 +32,8 @@ type extensionRuntimeInfo struct {
 
 type failureProcessor func(err error)
 
+// WSManager is a websocket manager that manages websocket connections
+// between the server and the plugins.
 type WSManager struct {
 	debug                                   bool
 	logger                                  *slog.Logger
@@ -47,6 +49,7 @@ type WSManager struct {
 	extensionRuntimeInfoByExtensionPointIDs map[string][]extensionRuntimeInfo
 }
 
+// NewWSManager creates a new WSManager instance.
 func NewWSManager() *WSManager {
 	m := &WSManager{
 		mu:                                      &sync.Mutex{},
@@ -62,33 +65,38 @@ func NewWSManager() *WSManager {
 	return m.WithFailureProcessor(m.DefaultFailureProcessor)
 }
 
+// WithDebug enables debug mode for the WSManager.
 func (m *WSManager) WithDebug() *WSManager {
 	m.debug = true
 	return m
 }
 
+// WithFixedPort sets the fixed port for the WSManager.
 func (m *WSManager) WithFixedPort(port int) *WSManager {
 	m.pmsPort = port
 	return m
 }
 
+// WithLogger sets the logger for the WSManager.
 func (m *WSManager) WithLogger(logger *slog.Logger) *WSManager {
 	m.logger = logger
 	return m
 }
 
+// WithFailureProcessor sets the custom failure processor for the WSManager.
 func (m *WSManager) WithFailureProcessor(p failureProcessor) *WSManager {
 	m.failureProcessor = p
 	return m
 }
 
+// Init initializes the WSManager.
 func (m *WSManager) Init() (*WSManager, error) {
-	err := m.Listen()
+	err := m.listen()
 	if err != nil {
 		return m, err
 	}
 	go func() {
-		err := m.StartServer()
+		err := m.startServer()
 		if err != nil {
 			panic(fmt.Errorf("init plugins manager: %w", err))
 		}
@@ -96,7 +104,7 @@ func (m *WSManager) Init() (*WSManager, error) {
 	return m, nil
 }
 
-func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
+func (m *WSManager) handle(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{}
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -162,7 +170,7 @@ func (m *WSManager) Handle(w http.ResponseWriter, r *http.Request) {
 						return ch(code, text)
 					})
 					m.mu.Unlock()
-					m.Started(registerData.Secret)
+					m.started(registerData.Secret)
 				case pluginstypes.CommandTypeExecuteExtension:
 					if msg.CorrelationID != "" {
 						m.mu.Lock()
@@ -317,6 +325,9 @@ func (m *WSManager) writeResponse(msgResponse pluginstypes.Message, c *websocket
 	return nil
 }
 
+// ExecuteExtensions executes the extensions for the given extension point ID and input.
+// It returns a channel that will receive the results of the execution.
+// The channel will be closed when all the extensions have been executed or after first error returned.
 func ExecuteExtensions[IN any, OUT any](ctx context.Context, m *WSManager, extensionPointID string, in IN) chan pluginstypes.ExecuteExtensionResult[OUT] {
 	m.mu.Lock()
 	extensionRuntimeInfos := m.extensionRuntimeInfoByExtensionPointIDs[extensionPointID]
@@ -408,7 +419,7 @@ func ExecuteExtensions[IN any, OUT any](ctx context.Context, m *WSManager, exten
 	return res
 }
 
-func (m *WSManager) Listen() error {
+func (m *WSManager) listen() error {
 	var err error
 	address := "127.0.0.1:"
 	if m.pmsPort != 0 {
@@ -422,8 +433,8 @@ func (m *WSManager) Listen() error {
 	return nil
 }
 
-func (m *WSManager) StartServer() error {
-	http.HandleFunc("/", m.Handle)
+func (m *WSManager) startServer() error {
+	http.HandleFunc("/", m.handle)
 	return http.Serve(m.lis, nil)
 }
 
@@ -432,12 +443,21 @@ type WSRegisterArgs struct {
 	HttpPort int
 }
 
-func (m *WSManager) Started(secret string) *int {
+func (m *WSManager) started(secret string) *int {
 	m.pluginRegistrationChannel <- secret
 	i := 0
 	return &i
 }
 
+// LoadPlugins loads the plugins specified by the given commands.
+//
+// The function starts a new goroutine for each plugin command, and
+// waits for all plugins to finish loading before returning.
+//
+// If the context is canceled, the function returns an error.
+//
+// The function returns an error if any of the plugin commands
+// fail to start.
 func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 	var secrets []string
 
@@ -464,10 +484,10 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 		return nil
 	}
 
-	return m.AwaitPlugins(ctx, secrets)
+	return m.awaitPlugins(ctx, secrets)
 }
 
-func (m *WSManager) AwaitPlugins(ctx context.Context, secrets []string) error {
+func (m *WSManager) awaitPlugins(ctx context.Context, secrets []string) error {
 	waitingSecrets := make(map[string]struct{})
 	for _, secret := range secrets {
 		waitingSecrets[secret] = struct{}{}

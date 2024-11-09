@@ -6,6 +6,14 @@ import (
 	types "github.com/derbylock/go-pluggable-extensions/plugins-lib/pkg/plugins/types"
 )
 
+// Extension registers an extension with the WSManager.
+//
+// The extension is registered with the WSManager using the provided
+// ExtensionConfig and implementation function. The implementation function
+// is used to handle incoming requests for the extension.
+//
+// The ExtensionConfig contains information about the extension, such as its
+// ID and the extension point ID it is registered with.
 func Extension[IN any, OUT any](m *WSManager, cfg types.ExtensionConfig, implementation func(ctx context.Context, in IN) (OUT, error)) {
 	m.mu.Lock()
 	currentExtensionRuntimeInfos, ok := m.extensionRuntimeInfoByExtensionPointIDs[cfg.ExtensionPointID]
