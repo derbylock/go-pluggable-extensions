@@ -47,6 +47,7 @@ type WSManager struct {
 	pluginIDBySecret                        map[string]string
 	channelByPluginID                       map[string]*websocket.Conn
 	extensionRuntimeInfoByExtensionPointIDs map[string][]extensionRuntimeInfo
+	pluginsOrdered                          bool
 }
 
 // NewWSManager creates a new WSManager instance.
@@ -500,6 +501,7 @@ func (m *WSManager) awaitPlugins(ctx context.Context, secrets []string) error {
 			if len(waitingSecrets) == 0 {
 				m.mu.Unlock()
 				m.updateExtensionsOrder()
+				m.pluginsOrdered = true
 				return nil
 			}
 			m.mu.Unlock()

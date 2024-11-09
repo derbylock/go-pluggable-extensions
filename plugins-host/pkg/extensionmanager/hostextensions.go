@@ -16,6 +16,7 @@ import (
 // ID and the extension point ID it is registered with.
 func Extension[IN any, OUT any](m *WSManager, cfg types.ExtensionConfig, implementation func(ctx context.Context, in IN) (OUT, error)) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	currentExtensionRuntimeInfos, ok := m.extensionRuntimeInfoByExtensionPointIDs[cfg.ExtensionPointID]
 	if !ok {
 		currentExtensionRuntimeInfos = make([]extensionRuntimeInfo, 0)
@@ -48,6 +49,16 @@ func Extension[IN any, OUT any](m *WSManager, cfg types.ExtensionConfig, impleme
 		},
 	})
 
+	if m.pluginsOrdered {
+		var err error
+		currentExtensionRuntimeInfos, err = OrderExtensionRuntimeInfo(currentExtensionRuntimeInfos)
+		if err != nil {
+			m.mu.Unlock()
+			m.Failure(err)
+
+			// lock to unlock after in defer
+			m.mu.Lock()
+		}
+	}
 	m.extensionRuntimeInfoByExtensionPointIDs[cfg.ExtensionPointID] = currentExtensionRuntimeInfos
-	m.mu.Unlock()
 }
