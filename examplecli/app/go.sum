@@ -1,7 +1,7 @@
-github.com/derbylock/go-pluggable-extensions/plugins-host v1.1.36 h1:rM5kP0/E+dAlu+c1td5680oMmKZlZNxBistC9SiadXM=
-github.com/derbylock/go-pluggable-extensions/plugins-host v1.1.36/go.mod h1:+5roTg1CCiHXZK/qzthePpMXdjrn51BorYxfJLWZDUo=
-github.com/derbylock/go-pluggable-extensions/plugins-lib v1.1.36 h1:128CDYmBIq1OX3S4ZQFkoLgmttbzkhHqFHd6uT9XoOI=
-github.com/derbylock/go-pluggable-extensions/plugins-lib v1.1.36/go.mod h1:8vTsHH9XtsN8fMxWzILxdDEc8lNevJ4fFnGFyQ1kEz8=
+github.com/derbylock/go-pluggable-extensions/plugins-host v1.1.37 h1:oBW8K9A9V50nZz2CsWPlPIR9bmX9+g0uBUJW7GxVxkg=
+github.com/derbylock/go-pluggable-extensions/plugins-host v1.1.37/go.mod h1:iFWf1vJs6qRw6oTyUUoy1qI628jDJkfn/Xa7EbeFkcY=
+github.com/derbylock/go-pluggable-extensions/plugins-lib v1.1.37 h1:DpzQxxaxrejIk4TwGOlES1O89KUwQbRYQU5w5NylxRw=
+github.com/derbylock/go-pluggable-extensions/plugins-lib v1.1.37/go.mod h1:8vTsHH9XtsN8fMxWzILxdDEc8lNevJ4fFnGFyQ1kEz8=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=
