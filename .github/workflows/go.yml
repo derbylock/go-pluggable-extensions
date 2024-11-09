@@ -100,3 +100,4 @@ jobs:
     - name: Test example app
       working-directory: examplecli/app
       run: go test -v ./...
+
