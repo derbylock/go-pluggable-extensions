@@ -25,6 +25,10 @@ func newExtensionRuntimeInfoWithDependenciesInfo(
 	}
 }
 
+// OrderExtensionRuntimeInfo orders a list of extension runtime information objects based on their dependencies.
+//
+// The function takes in a list of extension runtime information objects and returns a list of the same objects,
+// but with the dependencies resolved and the objects ordered based on their dependencies.
 func OrderExtensionRuntimeInfo(orig []extensionRuntimeInfo) ([]extensionRuntimeInfo, error) {
 	recursiveDependenciesByName, err := createRecursiveDependenciesByExtensionID(orig)
 	if err != nil {
