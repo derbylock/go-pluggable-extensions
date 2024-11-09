@@ -3,7 +3,7 @@
 //
 // So, the output would be like:
 //
-//	Hello Anton from plugin A! 0wVcAFjHFaXaFDAzDFsj1fH4UyP7FQ15ohLAoE81eTzbSzzGjQMkxaUaRGS4fjV8
+//	Hello Anton from plugin A!
 //	Current date is 2024-09-25T20:36:43+03:00.
 //	Welcome to an ordered plugins world, Anton!
 //

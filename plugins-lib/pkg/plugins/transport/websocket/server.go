@@ -17,7 +17,7 @@ type WaiterInfo struct {
 	out func() any
 }
 
-type Server struct {
+type Client struct {
 	pluginID     string
 	pluginSecret string
 	pmsPort      int
@@ -27,13 +27,13 @@ type Server struct {
 	waiters      map[string]*WaiterInfo
 }
 
-func NewServer(
+func NewClient(
 	pluginID string,
 	pluginSecret string,
 	pmsPort int,
 	extensions map[string]map[string]*pluginstypes.ExtensionRuntimeInfo,
-) *Server {
-	return &Server{
+) *Client {
+	return &Client{
 		pluginID:     pluginID,
 		pluginSecret: pluginSecret,
 		pmsPort:      pmsPort,
@@ -43,7 +43,56 @@ func NewServer(
 	}
 }
 
-func (s *Server) Start() error {
+func (s *Client) Start() error {
+	c, err := s.initConnection()
+	if err != nil {
+		return fmt.Errorf("initConnection: %w", err)
+	}
+	defer func() {
+		if err := c.Close(); err != nil {
+			panic(err)
+		}
+	}()
+
+	if err := s.registerPlugin(c); err != nil {
+		return err
+	}
+
+	for {
+		_, msgBytes, err := c.ReadMessage()
+		if err != nil {
+			e := fmt.Errorf("read message failed: %w", err)
+			log.Fatal(e)
+			return e
+		}
+
+		ctx := context.Background()
+
+		var msg pluginstypes.Message
+		if err := json.Unmarshal(msgBytes, &msg); err != nil {
+			return s.sendPluginErrorResponse(msg, fmt.Errorf("unmarshal message: %w", err), c)
+		}
+
+		switch msg.Type {
+		case pluginstypes.CommandTypeExecuteExtension:
+			if msg.CorrelationID != "" {
+				// plugin received invocation result
+				if exit := s.processExecutionResultMessage(msg); exit {
+					break
+				}
+			} else {
+				// plugin received invocation request
+				go func() {
+					if err := s.processRequest(msg, c, ctx); err != nil {
+						log.Fatal(err)
+					}
+				}()
+			}
+		}
+	}
+}
+
+func (s *Client) initConnection() (*websocket.Conn, error) {
 	serverAddr := fmt.Sprintf("127.0.0.1:%d", s.pmsPort)
 
 	u := url.URL{Scheme: "ws", Host: serverAddr, Path: "/"}
@@ -52,13 +101,11 @@ func (s *Server) Start() error {
 	if err != nil {
 		log.Fatal("dial:", err)
 	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			panic(err)
-		}
-	}()
 	s.channel = c
+	return c, err
+}
 
+func (s *Client) registerPlugin(c *websocket.Conn) error {
 	implementedExtensions := make([]pluginstypes.ExtensionConfig, 0)
 	for _, extensionInfos := range s.extensions {
 		for _, info := range extensionInfos {
@@ -82,68 +129,10 @@ func (s *Server) Start() error {
 	if err := c.WriteMessage(websocket.TextMessage, msgRegisterBytes); err != nil {
 		return fmt.Errorf("register plugin: %w", err)
 	}
-
-	for {
-		_, msgBytes, err := c.ReadMessage()
-		if err != nil {
-			e := fmt.Errorf("read message failed: %w", err)
-			log.Fatal(e)
-			return e
-		}
-
-		ctx := context.Background()
-
-		var msg pluginstypes.Message
-		if err := json.Unmarshal(msgBytes, &msg); err != nil {
-			return s.sendPluginErrorResponse(msg, fmt.Errorf("unmarshal message: %w", err), c)
-		}
-
-		switch msg.Type {
-		case pluginstypes.CommandTypeExecuteExtension:
-			if msg.CorrelationID != "" {
-				// plugin received invocation result
-				if exit := func() bool {
-					if msg.IsFinal {
-						defer delete(s.waiters, msg.CorrelationID)
-					}
-					s.mu.Lock()
-					waiter, ok := s.waiters[msg.CorrelationID]
-					defer s.mu.Unlock()
-					if !ok {
-						log.Fatal(fmt.Errorf("unknown correlationID %s", msg.CorrelationID))
-						return true
-					}
-
-					if msg.Error != nil {
-						waiter.ch <- msg.Error
-						return true
-					}
-
-					outResult := waiter.out()
-					if err := json.Unmarshal(msg.Data, outResult); err != nil {
-						waiter.ch <- err
-						return true
-					}
-					waiter.ch <- outResult
-					if msg.IsFinal {
-						close(waiter.ch)
-					}
-					return false
-				}(); exit {
-					break
-				}
-			} else {
-				go func() {
-					if err := s.processRequest(msg, c, ctx); err != nil {
-						log.Fatal(err)
-					}
-				}()
-			}
-		}
-	}
+	return nil
 }
 
-func (s *Server) processRequest(msg pluginstypes.Message, c *websocket.Conn, ctx context.Context) error {
+func (s *Client) processRequest(msg pluginstypes.Message, c *websocket.Conn, ctx context.Context) error {
 	// plugin extension invoked
 	var executeExtensionData pluginstypes.ExecuteExtensionData
 	if err := json.Unmarshal(msg.Data, &executeExtensionData); err != nil {
@@ -179,7 +168,36 @@ func (s *Server) processRequest(msg pluginstypes.Message, c *websocket.Conn, ctx
 	return nil
 }
 
-func (s *Server) sendPluginErrorResponse(msg pluginstypes.Message, err error, c *websocket.Conn) error {
+func (s *Client) processExecutionResultMessage(msg pluginstypes.Message) bool {
+	if msg.IsFinal {
+		defer delete(s.waiters, msg.CorrelationID)
+	}
+	s.mu.Lock()
+	waiter, ok := s.waiters[msg.CorrelationID]
+	defer s.mu.Unlock()
+	if !ok {
+		log.Fatal(fmt.Errorf("unknown correlationID %s", msg.CorrelationID))
+		return true
+	}
+
+	if msg.Error != nil {
+		waiter.ch <- msg.Error
+		return true
+	}
+
+	outResult := waiter.out()
+	if err := json.Unmarshal(msg.Data, outResult); err != nil {
+		waiter.ch <- err
+		return true
+	}
+	waiter.ch <- outResult
+	if msg.IsFinal {
+		close(waiter.ch)
+	}
+	return false
+}
+
+func (s *Client) sendPluginErrorResponse(msg pluginstypes.Message, err error, c *websocket.Conn) error {
 	msgResponse := pluginstypes.Message{
 		CorrelationID: msg.MsgID,
 		Type:          pluginstypes.CommandTypeExecuteExtension,
@@ -193,7 +211,7 @@ func (s *Server) sendPluginErrorResponse(msg pluginstypes.Message, err error, c 
 	return errWrite
 }
 
-func (s *Server) sendExtensionErrorResponse(msg pluginstypes.Message, ext pluginstypes.ExtensionRuntimeInfo, err error, c *websocket.Conn) error {
+func (s *Client) sendExtensionErrorResponse(msg pluginstypes.Message, ext pluginstypes.ExtensionRuntimeInfo, err error, c *websocket.Conn) error {
 	msgResponse := pluginstypes.Message{
 		CorrelationID: msg.MsgID,
 		Type:          pluginstypes.CommandTypeExecuteExtension,
@@ -207,7 +225,7 @@ func (s *Server) sendExtensionErrorResponse(msg pluginstypes.Message, ext plugin
 	return errWrite
 }
 
-func (s *Server) writeResponse(msgResponse pluginstypes.Message, c *websocket.Conn) error {
+func (s *Client) writeResponse(msgResponse pluginstypes.Message, c *websocket.Conn) error {
 	msgResponseBytes, err := json.Marshal(msgResponse)
 	if err != nil {
 		return fmt.Errorf("marshal response: %w", err)
@@ -219,7 +237,7 @@ func (s *Server) writeResponse(msgResponse pluginstypes.Message, c *websocket.Co
 }
 
 func ExecuteExtensions[IN any, OUT any](
-	s *Server,
+	s *Client,
 	extensionPointID string,
 	in IN,
 ) chan pluginstypes.ExecuteExtensionResult[OUT] {

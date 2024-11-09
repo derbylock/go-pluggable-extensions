@@ -12,12 +12,14 @@ var extensions = make(map[string]map[string]*types.ExtensionRuntimeInfo, 0)
 
 var pluginSecret string
 
-var websocketServer *websocket.Server
+var websocketServer *websocket.Client
 
+// PluginContextID returns the plugin initialization secret.
 func PluginContextID() string {
 	return pluginSecret
 }
 
+// Extension registers an extension with the given configuration and implementation.
 func Extension[IN any, OUT any](cfg types.ExtensionConfig, implementation func(ctx context.Context, in IN) (OUT, error)) {
 	currentExtensions, ok := extensions[cfg.ExtensionPointID]
 	if !ok {
@@ -48,16 +50,18 @@ func Extension[IN any, OUT any](cfg types.ExtensionConfig, implementation func(c
 		})
 }
 
+// Start starts the plugin with the given context and plugin ID.
 func Start(ctx context.Context, pluginID string) error {
 	pmsSecret := flag.String("pms-secret", "", "")
 	pmsPort := flag.Int("pms-port", 0, "")
 	flag.Parse()
 	pluginSecret = *pmsSecret
 
-	websocketServer = websocket.NewServer(pluginID, pluginSecret, *pmsPort, extensions)
+	websocketServer = websocket.NewClient(pluginID, pluginSecret, *pmsPort, extensions)
 	return websocketServer.Start()
 }
 
+// ExecuteExtensions executes the extensions with the given extension point ID and input.
 func ExecuteExtensions[IN any, OUT any](ctx context.Context, extensionPointID string, in IN) chan types.ExecuteExtensionResult[OUT] {
 	return websocket.ExecuteExtensions[IN, OUT](websocketServer, extensionPointID, in)
 }
