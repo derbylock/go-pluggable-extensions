@@ -174,7 +174,7 @@ func (m *WSManager) handle(w http.ResponseWriter, r *http.Request) {
 				case pluginstypes.CommandTypeExecuteExtension:
 					if msg.CorrelationID != "" {
 						m.mu.Lock()
-						if exit := func() bool {
+						func() bool {
 							defer m.mu.Unlock()
 							defer delete(m.waitersByRequestID, msg.CorrelationID)
 							defer delete(connWaiters, msg.CorrelationID)
@@ -195,9 +195,7 @@ func (m *WSManager) handle(w http.ResponseWriter, r *http.Request) {
 							}
 							waiter.ch <- waiter.out
 							return false
-						}(); exit {
-							break
-						}
+						}()
 					} else {
 						go m.processExecuteExtensionRequest(ctx, msg, c)
 					}
@@ -425,7 +423,7 @@ func (m *WSManager) listen() error {
 	if m.pmsPort != 0 {
 		address += strconv.Itoa(m.pmsPort)
 	}
-	m.lis, err = net.Listen("tcp", "127.0.0.1:")
+	m.lis, err = net.Listen("tcp", address)
 	if err != nil {
 		log.Fatal("listen error:", err)
 	}
