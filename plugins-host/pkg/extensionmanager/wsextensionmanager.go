@@ -471,6 +471,12 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 
 	for _, cmd := range cmds {
 		pluginCommand := cmd
+
+		secret := random.GenerateRandomString(64)
+		m.mu.Lock()
+		waitingSecrets[secret] = struct{}{}
+		m.mu.Unlock()
+
 		m.logger.Info("cmd starting", slog.String("cmd", pluginCommand))
 		go func() {
 			m.logger.Info("cmd go routine started", slog.String("cmd", pluginCommand))
@@ -483,7 +489,6 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 					}
 				}
 			}()
-			secret := random.GenerateRandomString(64)
 			m.logger.Info("cmd go routine secret", slog.String("cmd", pluginCommand), slog.String("secret", secret))
 			m.logger.Info("cmd pms-port", slog.String("cmd", pluginCommand), slog.String("port", strconv.Itoa(m.pmsPort)))
 			command := exec.Command(pluginCommand, "-pms-port", strconv.Itoa(m.pmsPort), "-pms-secret", secret)
@@ -498,13 +503,11 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 				m.managerErrorsChannel <- fmt.Errorf("can't start plugin %s: %w", pluginCommand, err)
 				m.logger.Info("cmd err sent", slog.String("cmd", pluginCommand), slog.String("err", err.Error()))
 			}
-			m.logger.Info("cmd lock", slog.String("cmd", pluginCommand))
-			m.mu.Lock()
-			m.logger.Info("cmd locked", slog.String("cmd", pluginCommand))
-			waitingSecrets[secret] = struct{}{}
-			m.logger.Info("cmd unlock", slog.String("cmd", pluginCommand))
-			m.mu.Unlock()
-			m.logger.Info("cmd unlocked", slog.String("cmd", pluginCommand))
+			if err := command.Wait(); err != nil {
+				m.logger.Info("cmd wait err", slog.String("cmd", pluginCommand), slog.String("err", err.Error()))
+				m.managerErrorsChannel <- fmt.Errorf("can't start plugin command %s: %w", pluginCommand, err)
+				m.logger.Info("cmd wait err sent", slog.String("cmd", pluginCommand), slog.String("err", err.Error()))
+			}
 		}()
 	}
 
