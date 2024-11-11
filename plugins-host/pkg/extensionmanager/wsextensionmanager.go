@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -465,35 +466,45 @@ func (m *WSManager) started(secret string) *int {
 // The function returns an error if any of the plugin commands
 // fail to start.
 func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
-	var secrets []string
+	waitingSecrets := make(map[string]struct{})
+	m.logger.Info("cmds:", slog.String("cmds", strings.Join(cmds, ";")))
 
 	for _, cmd := range cmds {
 		pluginCommand := cmd
+		m.logger.Info("cmd starting", slog.String("cmd", pluginCommand))
 		go func() {
+			m.logger.Info("cmd go routine started", slog.String("cmd", pluginCommand))
 			defer func() {
-				//if r := recover(); r != nil {
-				//	if err, ok := r.(error); ok {
-				//		m.managerErrorsChannel <- fmt.Errorf("can't start plugin, panic %s: %w", pluginCommand, err)
-				//	} else {
-				//		m.managerErrorsChannel <- fmt.Errorf("can't start plugin, panic %s: %v", pluginCommand, r)
-				//	}
-				//}
+				if r := recover(); r != nil {
+					if err, ok := r.(error); ok {
+						m.managerErrorsChannel <- fmt.Errorf("can't start plugin, panic %s: %w", pluginCommand, err)
+					} else {
+						m.managerErrorsChannel <- fmt.Errorf("can't start plugin, panic %s: %v", pluginCommand, r)
+					}
+				}
 			}()
 			secret := random.GenerateRandomString(64)
+			m.logger.Info("cmd go routine secret", slog.String("cmd", pluginCommand), slog.String("secret", secret))
+			m.logger.Info("cmd pms-port", slog.String("cmd", pluginCommand), slog.String("port", strconv.Itoa(m.pmsPort)))
 			command := exec.Command(pluginCommand, "-pms-port", strconv.Itoa(m.pmsPort), "-pms-secret", secret)
+			m.logger.Info("cmd created", slog.String("cmd", pluginCommand))
 			if m.debug {
 				command.Stdout = os.Stdout
 				command.Stderr = os.Stderr
 			}
-			if 1 == 1 {
-				panic(fmt.Errorf("some unexpected error"))
-			}
+			m.logger.Info("cmd stdout stderr finished", slog.String("cmd", pluginCommand))
 			if err := command.Start(); err != nil {
+				m.logger.Info("cmd err", slog.String("cmd", pluginCommand), slog.String("err", err.Error()))
 				m.managerErrorsChannel <- fmt.Errorf("can't start plugin %s: %w", pluginCommand, err)
+				m.logger.Info("cmd err sent", slog.String("cmd", pluginCommand), slog.String("err", err.Error()))
 			}
+			m.logger.Info("cmd lock", slog.String("cmd", pluginCommand))
 			m.mu.Lock()
-			secrets = append(secrets, secret)
+			m.logger.Info("cmd locked", slog.String("cmd", pluginCommand))
+			waitingSecrets[secret] = struct{}{}
+			m.logger.Info("cmd unlock", slog.String("cmd", pluginCommand))
 			m.mu.Unlock()
+			m.logger.Info("cmd unlocked", slog.String("cmd", pluginCommand))
 		}()
 	}
 
@@ -502,14 +513,10 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 		return nil
 	}
 
-	return m.awaitPlugins(ctx, secrets)
+	return m.awaitPlugins(ctx, waitingSecrets)
 }
 
-func (m *WSManager) awaitPlugins(ctx context.Context, secrets []string) error {
-	waitingSecrets := make(map[string]struct{})
-	for _, secret := range secrets {
-		waitingSecrets[secret] = struct{}{}
-	}
+func (m *WSManager) awaitPlugins(ctx context.Context, waitingSecrets map[string]struct{}) error {
 	for {
 		select {
 		case <-ctx.Done():
