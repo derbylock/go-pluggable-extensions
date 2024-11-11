@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -467,7 +466,6 @@ func (m *WSManager) started(secret string) *int {
 // fail to start.
 func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 	waitingSecrets := make(map[string]struct{})
-	m.logger.Info("cmds:", slog.String("cmds", strings.Join(cmds, ";")))
 
 	for _, cmd := range cmds {
 		pluginCommand := cmd
@@ -477,9 +475,7 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 		waitingSecrets[secret] = struct{}{}
 		m.mu.Unlock()
 
-		m.logger.Info("cmd starting", slog.String("cmd", pluginCommand))
 		go func() {
-			m.logger.Info("cmd go routine started", slog.String("cmd", pluginCommand))
 			defer func() {
 				if r := recover(); r != nil {
 					if err, ok := r.(error); ok {
@@ -489,24 +485,16 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 					}
 				}
 			}()
-			m.logger.Info("cmd go routine secret", slog.String("cmd", pluginCommand), slog.String("secret", secret))
-			m.logger.Info("cmd pms-port", slog.String("cmd", pluginCommand), slog.String("port", strconv.Itoa(m.pmsPort)))
 			command := exec.Command(pluginCommand, "-pms-port", strconv.Itoa(m.pmsPort), "-pms-secret", secret)
-			m.logger.Info("cmd created", slog.String("cmd", pluginCommand))
 			if m.debug {
 				command.Stdout = os.Stdout
 				command.Stderr = os.Stderr
 			}
-			m.logger.Info("cmd stdout stderr finished", slog.String("cmd", pluginCommand))
 			if err := command.Start(); err != nil {
-				m.logger.Info("cmd err", slog.String("cmd", pluginCommand), slog.String("err", err.Error()))
 				m.managerErrorsChannel <- fmt.Errorf("can't start plugin %s: %w", pluginCommand, err)
-				m.logger.Info("cmd err sent", slog.String("cmd", pluginCommand), slog.String("err", err.Error()))
 			}
 			if err := command.Wait(); err != nil {
-				m.logger.Info("cmd wait err", slog.String("cmd", pluginCommand), slog.String("err", err.Error()))
 				m.managerErrorsChannel <- fmt.Errorf("can't start plugin command %s: %w", pluginCommand, err)
-				m.logger.Info("cmd wait err sent", slog.String("cmd", pluginCommand), slog.String("err", err.Error()))
 			}
 		}()
 	}
