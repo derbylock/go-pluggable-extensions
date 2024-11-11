@@ -105,6 +105,12 @@ func (s *Client) initConnection() (*websocket.Conn, error) {
 	return c, err
 }
 
+func (s *Client) writeMessage(c *websocket.Conn, messageType int, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return c.WriteMessage(messageType, data)
+}
+
 func (s *Client) registerPlugin(c *websocket.Conn) error {
 	implementedExtensions := make([]pluginstypes.ExtensionConfig, 0)
 	for _, extensionInfos := range s.extensions {
@@ -126,7 +132,7 @@ func (s *Client) registerPlugin(c *websocket.Conn) error {
 	if err != nil {
 		return fmt.Errorf("marshal register message: %w", err)
 	}
-	if err := c.WriteMessage(websocket.TextMessage, msgRegisterBytes); err != nil {
+	if err := s.writeMessage(c, websocket.TextMessage, msgRegisterBytes); err != nil {
 		return fmt.Errorf("register plugin: %w", err)
 	}
 	return nil
@@ -229,7 +235,7 @@ func (s *Client) writeResponse(msgResponse pluginstypes.Message, c *websocket.Co
 	if err != nil {
 		return fmt.Errorf("marshal response: %w", err)
 	}
-	if err := c.WriteMessage(websocket.TextMessage, msgResponseBytes); err != nil {
+	if err := s.writeMessage(c, websocket.TextMessage, msgResponseBytes); err != nil {
 		return fmt.Errorf("write message to channel: %w", err)
 	}
 	return nil
@@ -281,7 +287,7 @@ func ExecuteExtensions[IN any, OUT any](
 		}
 		s.mu.Unlock()
 
-		if err := s.channel.WriteMessage(websocket.TextMessage, sendMsgBytes); err != nil {
+		if err := s.writeMessage(s.channel, websocket.TextMessage, sendMsgBytes); err != nil {
 			ch <- fmt.Errorf("write message: %w", err)
 			delete(s.waiters, msgID)
 			return
