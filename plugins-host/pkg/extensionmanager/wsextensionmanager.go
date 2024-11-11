@@ -485,6 +485,9 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 				command.Stdout = os.Stdout
 				command.Stderr = os.Stderr
 			}
+			if 1 == 1 {
+				panic(fmt.Errorf("some unexpected error"))
+			}
 			if err := command.Start(); err != nil {
 				m.managerErrorsChannel <- fmt.Errorf("can't start plugin %s: %w", pluginCommand, err)
 			}
@@ -517,7 +520,9 @@ func (m *WSManager) awaitPlugins(ctx context.Context, secrets []string) error {
 			if len(waitingSecrets) == 0 {
 				m.mu.Unlock()
 				m.updateExtensionsOrder()
+				m.mu.Lock()
 				m.pluginsOrdered = true
+				m.mu.Unlock()
 				return nil
 			}
 			m.mu.Unlock()
