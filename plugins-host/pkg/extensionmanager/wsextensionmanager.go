@@ -305,6 +305,12 @@ func (m *WSManager) sendErrorResponse(msg pluginstypes.Message, err error, c *we
 	return errWrite
 }
 
+func (m *WSManager) writeMessage(c *websocket.Conn, messageType int, data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return c.WriteMessage(messageType, data)
+}
+
 func (m *WSManager) writeResponse(msgResponse pluginstypes.Message, c *websocket.Conn) error {
 	msgResponseBytes, err := json.Marshal(msgResponse)
 	if err != nil {
@@ -318,7 +324,7 @@ func (m *WSManager) writeResponse(msgResponse pluginstypes.Message, c *websocket
 			slog.String("msg", string(msgResponseBytes)),
 		)
 	}
-	if err := c.WriteMessage(websocket.TextMessage, msgResponseBytes); err != nil {
+	if err := m.writeMessage(c, websocket.TextMessage, msgResponseBytes); err != nil {
 		return fmt.Errorf("write message to channel: %w", err)
 	}
 	return nil
@@ -397,7 +403,7 @@ func ExecuteExtensions[IN any, OUT any](ctx context.Context, m *WSManager, exten
 					slog.String("msg", string(sendMsgBytes)),
 				)
 			}
-			if err := runtimeInfo.conn.WriteMessage(websocket.TextMessage, sendMsgBytes); err != nil {
+			if err := m.writeMessage(runtimeInfo.conn, websocket.TextMessage, sendMsgBytes); err != nil {
 				sendErrorExecuteExtensionResult(res, err)
 				return
 			}
