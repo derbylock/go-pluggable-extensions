@@ -16,7 +16,6 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
-	"time"
 )
 
 type WaiterInfo struct {
@@ -471,7 +470,15 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 	for _, cmd := range cmds {
 		pluginCommand := cmd
 		go func() {
-			time.Sleep(time.Second)
+			defer func() {
+				if r := recover(); r != nil {
+					if err, ok := r.(error); ok {
+						m.managerErrorsChannel <- fmt.Errorf("can't start plugin, panic %s: %w", pluginCommand, err)
+					} else {
+						m.managerErrorsChannel <- fmt.Errorf("can't start plugin, panic %s: %v", pluginCommand, r)
+					}
+				}
+			}()
 			secret := random.GenerateRandomString(64)
 			command := exec.Command(pluginCommand, "-pms-port", strconv.Itoa(m.pmsPort), "-pms-secret", secret)
 			if m.debug {
