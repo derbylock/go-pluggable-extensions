@@ -176,7 +176,11 @@ func (s *Client) processRequest(msg pluginstypes.Message, c *websocket.Conn, ctx
 
 func (s *Client) processExecutionResultMessage(msg pluginstypes.Message) error {
 	if msg.IsFinal {
-		defer delete(s.waiters, msg.CorrelationID)
+		defer func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			delete(s.waiters, msg.CorrelationID)
+		}()
 	}
 	s.mu.Lock()
 	waiter, ok := s.waiters[msg.CorrelationID]
@@ -289,7 +293,9 @@ func ExecuteExtensions[IN any, OUT any](
 
 		if err := s.writeMessage(s.channel, websocket.TextMessage, sendMsgBytes); err != nil {
 			ch <- fmt.Errorf("write message: %w", err)
+			s.mu.Lock()
 			delete(s.waiters, msgID)
+			s.mu.Unlock()
 			return
 		}
 	}()
