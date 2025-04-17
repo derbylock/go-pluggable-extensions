@@ -500,7 +500,9 @@ func (m *WSManager) LoadPlugins(ctx context.Context, cmds ...string) error {
 	}
 
 	if len(cmds) == 0 {
-		m.updateExtensionsOrder()
+		if err := m.updateExtensionsOrder(); err != nil {
+			return fmt.Errorf("can't update extensions order: %w", err)
+		}
 		return nil
 	}
 
@@ -517,7 +519,9 @@ func (m *WSManager) awaitPlugins(ctx context.Context, waitingSecrets map[string]
 			delete(waitingSecrets, req)
 			if len(waitingSecrets) == 0 {
 				m.mu.Unlock()
-				m.updateExtensionsOrder()
+				if err := m.updateExtensionsOrder(); err != nil {
+					return err
+				}
 				m.mu.Lock()
 				m.pluginsOrdered = true
 				m.mu.Unlock()
@@ -530,7 +534,7 @@ func (m *WSManager) awaitPlugins(ctx context.Context, waitingSecrets map[string]
 	}
 }
 
-func (m *WSManager) updateExtensionsOrder() {
+func (m *WSManager) updateExtensionsOrder() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// reorder extensions according to order
@@ -538,14 +542,13 @@ func (m *WSManager) updateExtensionsOrder() {
 		prioritizedExtensionRuntimeInfos, err := OrderExtensionRuntimeInfo(v)
 		if err != nil {
 			m.mu.Unlock()
-			m.Failure(err)
-
 			// lock to unlock after in defer
 			m.mu.Lock()
-			break
+			return err
 		}
 		m.extensionRuntimeInfoByExtensionPointIDs[s] = prioritizedExtensionRuntimeInfos
 	}
+	return nil
 }
 
 func (m *WSManager) Failure(err error) {
