@@ -3,7 +3,7 @@ module github.com/derbylock/go-pluggable-extensions/examplecli/app
 go 1.21
 
 require (
-	github.com/derbylock/go-pluggable-extensions/plugins-host v1.1.42
+	github.com/derbylock/go-pluggable-extensions/plugins-host v1.1.44
 	github.com/derbylock/go-pluggable-extensions/plugins-lib v1.1.41
 )
 
